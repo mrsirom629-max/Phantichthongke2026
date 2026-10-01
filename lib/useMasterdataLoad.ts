@@ -7,7 +7,7 @@
  * 4. Dựng bảng chi tiết Thứ | Ngày | Số để kiểm chứng
  */
 import { useCallback, useRef, useState } from 'react';
-import { addDays, lotoOf, todayVN } from './stats';
+import { addDays, isValidDate, lotoOf, todayVN } from './stats';
 import { loadSpecificDays } from './liveDays';
 import type { DayResult } from './types';
 import type { StoredDay } from './masterdata';
@@ -37,7 +37,9 @@ export function useMasterdataLoad() {
 
   // useCallback + deps rỗng: identity ổn định → useEffect ở page chỉ chạy 1 lần,
   // không lặp vô hạn (mỗi lần lặp cũ đã gây POST liên tục → commit/deploy dồn dập).
-  const load = useCallback(async (d: number): Promise<MasterLoadState | null> => {
+  // endDate: ngày cuối của vòng quét (DD-MM-YYYY). Bỏ trống = hôm nay.
+  // Mỗi vòng là một cửa sổ MỚI lùi về quá khứ, không đè lên vòng cũ.
+  const load = useCallback(async (d: number, endDate?: string): Promise<MasterLoadState | null> => {
     if (busyRef.current) return null;
     busyRef.current = true;
     setLoading(true);
@@ -50,7 +52,8 @@ export function useMasterdataLoad() {
       if (!mdRes.ok) throw new Error('Không đọc được masterdata.');
       let all = ((await mdRes.json()) as { days: StoredDay[] }).days ?? [];
 
-      const to = todayVN();
+      const to = endDate && isValidDate(endDate) ? endDate : todayVN();
+      const from = addDays(to, -(d - 1));
       const want: string[] = [];
       for (let i = 0; i < d; i++) want.push(addDays(to, -i));
 
@@ -109,7 +112,6 @@ export function useMasterdataLoad() {
 
       // 3. Dựng dữ liệu khoảng từ masterdata (nguồn sự thật duy nhất)
       const have = new Map(all.map((x) => [x.date, x]));
-      const from = addDays(to, -(d - 1));
       const rangeDays: DayResult[] = [];
       let live = 0;
       for (const dt of want) {
@@ -148,6 +150,8 @@ export function useMasterdataLoad() {
           masterTo: all.length ? all[all.length - 1].date : null,
           rangeFrom: from.split('-').join('/'),
           rangeTo: to.split('-').join('/'),
+          windowFrom: from,
+          windowTo: to,
           rangeCount: d,
           haveCount: rangeDays.length,
           added: addedDates.length,

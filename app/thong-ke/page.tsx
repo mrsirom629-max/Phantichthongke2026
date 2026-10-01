@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { XSMN_SCHEDULE } from '../../lib/constants';
 import { addDays, computeStats, drawsInRange, todayVN } from '../../lib/stats';
 import { useMasterdataLoad } from '../../lib/useMasterdataLoad';
@@ -80,6 +80,7 @@ export default function StatsPage() {
   const provinces = useMemo(provinceList, []);
   const [days, setDays] = useState<number>(30);
   const [province, setProvince] = useState<string>('all');
+  const [cycle, setCycle] = useState(0);
   const {
     loading,
     progress,
@@ -87,16 +88,34 @@ export default function StatsPage() {
     data: master,
     load,
   } = useMasterdataLoad();
+  /**
+   * Con trỏ vòng quét: ngày cuối của vòng TIẾP THEO (null = bắt đầu từ hôm nay).
+   * Mỗi vòng là một cửa sổ N ngày MỚI lùi về quá khứ, không đè lên vòng cũ.
+   * Dùng ref để không làm useEffect chạy lại.
+   */
+  const windowEndRef = useRef<string | null>(null);
 
   /**
-   * Tải N ngày gần nhất QUA MASTERDATA: đọc kho trước, chỉ tải những ngày
-   * còn thiếu từ Minh Ngọc, ghi bổ sung vào kho (không trùng), rồi tính
-   * thống kê trên dữ liệu đã ghi.
+   * Quét một vòng N ngày QUA MASTERDATA.
+   * - reset=true (hoặc vòng đầu): quét N ngày gần nhất (kết thúc hôm nay).
+   * - reset=false: quét N ngày cũ hơn tiếp theo, đẩy lùi liên tục.
+   * Chỉ tải những ngày còn thiếu, ghi bổ sung không trùng.
    */
-  const loadData = useCallback((d: number) => load(d), [load]);
+  const loadData = useCallback(
+    async (d: number, reset: boolean) => {
+      const endArg = reset ? undefined : (windowEndRef.current ?? undefined);
+      const st = await load(d, endArg);
+      if (st) {
+        // Vòng sau bắt đầu từ ngày liền trước ngày đầu vòng này
+        windowEndRef.current = addDays(st.summary.windowFrom, -1);
+        setCycle((c) => (reset ? 1 : c + 1));
+      }
+    },
+    [load],
+  );
 
   useEffect(() => {
-    loadData(30);
+    loadData(30, true);
   }, [loadData]);
 
   /** Dữ liệu ngày trong khoảng — lấy từ masterdata (đã sắp xếp tăng dần). */
@@ -114,15 +133,18 @@ export default function StatsPage() {
     [master, days],
   );
 
-  /** Thống kê tính trực tiếp trên dữ liệu ngày đã tải (live + seed). */
+  /** Thống kê tính trực tiếp trên dữ liệu vòng quét hiện tại (live + seed). */
   const stats: StatsResult | null = useMemo(() => {
-    if (!daysData) return null;
-    const to = todayVN();
-    const from = addDays(to, -(days - 1));
-    const draws = drawsInRange(daysData.days, from, to, province);
+    if (!daysData || !master) return null;
+    const draws = drawsInRange(
+      daysData.days,
+      master.summary.windowFrom,
+      master.summary.windowTo,
+      province,
+    );
     if (draws.length === 0) return null;
     return computeStats(draws, TOP_N, province);
-  }, [daysData, days, province]);
+  }, [daysData, master, province]);
 
   /** Nguồn dữ liệu: live toàn bộ / pha trộn / demo toàn bộ. */
   const source: 'live' | 'mixed' | 'demo' = !daysData
@@ -157,7 +179,8 @@ export default function StatsPage() {
   const cold = stats ? (stats.cold.length ? stats.cold : deriveList(stats.freq, 'cold')) : [];
   const gan = stats ? (stats.gan.length ? stats.gan : deriveList(stats.freq, 'gan')) : [];
 
-  const handleCalc = () => loadData(days);
+  const handleCalc = () => loadData(days, true);
+  const handleNextCycle = () => loadData(days, false);
 
   const gridRows: string[][] = useMemo(() => {
     const rows: string[][] = [];
@@ -178,7 +201,7 @@ export default function StatsPage() {
   return (
     <div>
       <h1>Thống kê lô tô</h1>
-      <p className="muted">Tần suất các số 00–99 trong N ngày gần nhất, theo đài hoặc toàn miền Nam.</p>
+      <p className="muted">Tần suất các số 00–99 theo từng vòng quét N ngày, theo đài hoặc toàn miền Nam. Mỗi vòng là một chu kỳ mới lùi về quá khứ.</p>
 
       <div className="card">
         <div className="row">
@@ -209,7 +232,22 @@ export default function StatsPage() {
               {loading ? 'Đang tính...' : 'Tính toán'}
             </button>
           </div>
+          {cycle > 0 && (
+            <div className="field">
+              <label>&nbsp;</label>
+              <button type="button" className="ghost" onClick={handleNextCycle} disabled={loading}>
+                ⏭ Vòng tiếp theo
+              </button>
+            </div>
+          )}
         </div>
+        {cycle > 0 && master && (
+          <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
+            Vòng quét #{cycle}: {master.summary.rangeFrom} → {master.summary.rangeTo} • Bấm{' '}
+            <b>⏭ Vòng tiếp theo</b> để tải {days} ngày cũ hơn nữa vào masterdata
+            (đẩy lùi liên tục, không ghi đè ngày cũ).
+          </p>
+        )}
       </div>
 
       {loading && (

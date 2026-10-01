@@ -22,6 +22,9 @@ export interface MasterSummary {
   masterTo: string | null;
   rangeFrom: string;
   rangeTo: string;
+  /** Cửa sổ vòng quét hiện tại (DD-MM-YYYY) — vòng sau lùi từ windowFrom - 1 */
+  windowFrom: string;
+  windowTo: string;
   rangeCount: number; // số ngày yêu cầu trong khoảng
   haveCount: number; // số ngày thực có
   added: number;
