@@ -220,6 +220,47 @@ export default function Power655Page() {
   const [playbookK, setPlaybookK] = useState(5);
   const [playbookTickets, setPlaybookTickets] = useState<Portfolio | null>(null);
 
+  // Vé anh tick chọn từ các bảng kết quả
+  const [pickedKeys, setPickedKeys] = useState<string[]>([]);
+  const [pickMsg, setPickMsg] = useState('');
+
+  const ticketKey = (nums: number[]) => JSON.stringify(nums.slice().sort((a, b) => a - b));
+
+  const togglePick = useCallback((nums: number[]) => {
+    const k = ticketKey(nums);
+    setPickedKeys((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
+  }, []);
+
+  /** Lưu các vé anh đã tick chọn (chờ KQ kỳ tới) — ghi vào sổ tay nguồn 'user'. */
+  const savePickedTickets = useCallback(() => {
+    const tickets = pickedKeys.map((k) => JSON.parse(k) as number[]);
+    if (tickets.length === 0) {
+      setPickMsg('Anh tick chọn ít nhất 1 vé trong bảng rồi hãy lưu.');
+      return;
+    }
+    const distinct = new Set<number>();
+    tickets.forEach((t) => t.forEach((n) => distinct.add(n)));
+    const entry: EvoEntry = {
+      id: `${Date.now()}`,
+      source: 'user',
+      targetDate: '',
+      afterDate: todayVN(),
+      ky: '',
+      config: userManualConfig(tickets.length),
+      tickets,
+      totalScore: 0,
+      coverage: distinct.size,
+      createdAt: Date.now(),
+      status: 'pending',
+      actual: null,
+      hits: null,
+      meanHits: null,
+    };
+    persistEvo([entry, ...evoEntries]);
+    setPickedKeys([]);
+    setPickMsg(`Đã lưu ${tickets.length} vé anh đã chọn vào sổ tay — chờ KQ kỳ tới, rồi bấm "Đối chiếu" ở mục 7.`);
+  }, [pickedKeys, evoEntries]);
+
   /**
    * Tải các kỳ trong khoảng from → to: mỗi trang ngày của Minh Ngọc chứa
    * ~10 kỳ, đi lùi từ "to" về "from" và khử trùng theo kỳ vé.
@@ -332,6 +373,8 @@ export default function Power655Page() {
     setNnErr('');
     setPortfolio(null);
     setNnScores(null);
+    setPickedKeys([]);
+    setPickMsg('');
     setNnPhase('training');
     setTrainProg({ epoch: 0, total: nnEpochs, loss: 0 });
     try {
@@ -552,6 +595,7 @@ export default function Power655Page() {
     const scores = playbookScores(stats);
     const pf = solvePortfolio(scores, playbookK, lambda, DEFAULT_CONSTRAINTS);
     setPlaybookTickets(pf);
+    setPickedKeys([]);
     setUserMsg(`Đã dựng ${pf.tickets.length} vé từ sổ tay của anh (ưu tiên các số "hợp tay", vẫn giữ ràng buộc tổ hợp).`);
   }, [evoEntries, playbookK, lambda]);
 
@@ -1111,6 +1155,7 @@ export default function Power655Page() {
               <table className="grid">
                 <thead>
                   <tr>
+                    <th title="Tick chọn vé anh ưng để lưu vào sổ tay">Chọn</th>
                     <th>Vé</th>
                     <th>6 số</th>
                     <th>Điểm</th>
@@ -1122,6 +1167,15 @@ export default function Power655Page() {
                 <tbody>
                   {portfolio.tickets.map((t, i) => (
                     <tr key={i}>
+                      <td className="num">
+                        <input
+                          type="checkbox"
+                          checked={pickedKeys.includes(ticketKey(t.numbers))}
+                          onChange={() => togglePick(t.numbers)}
+                          title="Chọn vé này"
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                      </td>
                       <td className="num">#{i + 1}</td>
                       <td>{t.numbers.map((n) => <Ball key={n} n={n} size={26} />)}</td>
                       <td className="num">{t.score.toFixed(2)}</td>
@@ -1133,6 +1187,15 @@ export default function Power655Page() {
                 </tbody>
               </table>
             </div>
+            {pickedKeys.length > 0 && (
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button onClick={savePickedTickets}>
+                  Lưu {pickedKeys.length} vé đã chọn (chờ kỳ tới)
+                </button>
+                <button className="ghost" onClick={() => setPickedKeys([])}>Bỏ chọn</button>
+              </div>
+            )}
+            {pickMsg && <p>{pickMsg}</p>}
           </div>
         )}
       </div>
@@ -1471,6 +1534,7 @@ export default function Power655Page() {
               <table className="grid">
                 <thead>
                   <tr>
+                    <th title="Tick chọn vé anh ưng để lưu vào sổ tay">Chọn</th>
                     <th>Vé</th>
                     <th>6 số</th>
                     <th>Lẻ</th>
@@ -1481,6 +1545,15 @@ export default function Power655Page() {
                 <tbody>
                   {playbookTickets.tickets.map((t, i) => (
                     <tr key={i}>
+                      <td className="num">
+                        <input
+                          type="checkbox"
+                          checked={pickedKeys.includes(ticketKey(t.numbers))}
+                          onChange={() => togglePick(t.numbers)}
+                          title="Chọn vé này"
+                          style={{ width: 18, height: 18, cursor: 'pointer' }}
+                        />
+                      </td>
                       <td className="num">#{i + 1}</td>
                       <td>{t.numbers.map((n) => <Ball key={n} n={n} size={26} />)}</td>
                       <td className="num">{t.odd}/6</td>
@@ -1490,6 +1563,14 @@ export default function Power655Page() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+          {pickedKeys.length > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={savePickedTickets}>
+                Lưu {pickedKeys.length} vé đã chọn (chờ kỳ tới)
+              </button>
+              <button className="ghost" onClick={() => setPickedKeys([])}>Bỏ chọn</button>
             </div>
           )}
         </div>
