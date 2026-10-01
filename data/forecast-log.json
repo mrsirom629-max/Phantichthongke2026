@@ -82,5 +82,37 @@
     ],
     "status": "pending",
     "note": "Baseline tần suất cho 01/10/2026 (shadow)"
+  },
+  {
+    "id": "fc-1790833327732-359221",
+    "createdAt": "2026-10-01T05:42:07.732Z",
+    "targetDate": "05-10-2026",
+    "model": "freq",
+    "modelVersion": "freq-topk-v1",
+    "mode": "shadow",
+    "k": 5,
+    "params": {
+      "lookback": 10,
+      "hidden": 64,
+      "epochs": 500,
+      "lr": 0.5,
+      "seed": 42
+    },
+    "dataRange": {
+      "from": "03-07-2026",
+      "to": "30-09-2026",
+      "days": 90,
+      "live": 90,
+      "seed": 0
+    },
+    "numbers": [
+      "01",
+      "02",
+      "03",
+      "04",
+      "05"
+    ],
+    "status": "pending",
+    "note": "TEST tu dong - se xoa ngay"
   }
 ]
