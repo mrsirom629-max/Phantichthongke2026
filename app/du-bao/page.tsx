@@ -103,6 +103,45 @@ export default function ForecastPage() {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [entries, localEntries, mien]);
 
+  /** Bảng lưu trữ cặp số trúng — cả 2 miền, chỉ entry đã đối chiếu (mới nhất trước). */
+  const hitArchive: ForecastEntry[] = useMemo(() => {
+    const byId = new Map<string, ForecastEntry>();
+    for (const e of entries) byId.set(e.id, e);
+    for (const e of localEntries) byId.set(e.id, e);
+    const key = (d: string) => d.split('-').reverse().join(''); // DD-MM-YYYY → YYYYMMDD
+    return Array.from(byId.values())
+      .filter((e) => e.status === 'reconciled' && e.metrics)
+      .sort((a, b) => key(b.targetDate).localeCompare(key(a.targetDate)));
+  }, [entries, localEntries]);
+
+  /** Dựng dãy số mô phỏng, tô đậm các số trúng (nếu metrics có hitNumbers). */
+  const simNumbers = (e: ForecastEntry) => {
+    const hitSet = new Set(e.metrics?.hitNumbers ?? []);
+    return e.numbers.map((n, i) => {
+      const hit = hitSet.has(n);
+      return (
+        <span
+          key={`${e.id}-n${i}`}
+          style={
+            hit
+              ? {
+                  fontWeight: 800,
+                  color: '#fbbf24',
+                  background: 'rgba(251,191,36,.14)',
+                  borderRadius: 4,
+                  padding: '0 3px',
+                }
+              : undefined
+          }
+          title={hit ? 'Số trúng (khớp kết quả thật)' : undefined}
+        >
+          {n}
+          {i < e.numbers.length - 1 ? ' ' : ''}
+        </span>
+      );
+    });
+  };
+
   /** Đổi miền: reset mô phỏng đang dở, giữ nguyên form. */
   const switchMien = (m: Mien) => {
     if (m === mien || busy) return;
@@ -518,32 +557,7 @@ export default function ForecastPage() {
                     <td>{MODEL_LABELS[e.model]}</td>
                     <td className="num">{e.k}</td>
                     <td className="num" style={{ fontSize: 13 }}>
-                      {(() => {
-                        const hitSet = new Set(e.metrics?.hitNumbers ?? []);
-                        return e.numbers.map((n, i) => {
-                          const hit = hitSet.has(n);
-                          return (
-                            <span
-                              key={`${e.id}-${i}`}
-                              style={
-                                hit
-                                  ? {
-                                      fontWeight: 800,
-                                      color: '#fbbf24',
-                                      background: 'rgba(251,191,36,.14)',
-                                      borderRadius: 4,
-                                      padding: '0 3px',
-                                    }
-                                  : undefined
-                              }
-                              title={hit ? 'Số trúng (khớp kết quả thật)' : undefined}
-                            >
-                              {n}
-                              {i < e.numbers.length - 1 ? ' ' : ''}
-                            </span>
-                          );
-                        });
-                      })()}
+                      {simNumbers(e)}
                     </td>
                     <td>
                       {e.status === 'pending' ? (
@@ -610,6 +624,59 @@ export default function ForecastPage() {
               kỳ vọng hai con số này <b>bám sát nhau</b> — đó chính là kết quả trung thực
               mà nhật ký này ghi nhận liên tục.
             </div>
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>4. Bảng lưu trữ cặp số trúng — 2 miền</h3>
+        <p className="muted">
+          Mọi mô phỏng đã đối chiếu (cả Miền Nam và Miền Bắc), mỗi dòng một kỳ: ngày,
+          mô hình, dãy số dự báo (số trúng tô đậm) và các số trùng khớp kết quả thật.
+          Dữ liệu đọc từ nhật ký đã lưu trên server nên không mất khi tải lại trang.
+        </p>
+        {hitArchive.length === 0 ? (
+          <p className="muted">Chưa có mô phỏng nào được đối chiếu.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th>Ngày</th>
+                  <th>Miền</th>
+                  <th>Dự báo (mô hình)</th>
+                  <th>Số dự báo</th>
+                  <th>Số trúng</th>
+                  <th>Trúng / P</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hitArchive.map((e) => {
+                  const hits = e.metrics?.hitNumbers ?? [];
+                  return (
+                    <tr key={e.id}>
+                      <td className="num">{displayDate(e.targetDate)}</td>
+                      <td>{entryMien(e) === 'nam' ? 'Miền Nam' : 'Miền Bắc'}</td>
+                      <td>{MODEL_LABELS[e.model]}</td>
+                      <td className="num" style={{ fontSize: 13 }}>
+                        {simNumbers(e)}
+                      </td>
+                      <td
+                        className="num"
+                        style={{ fontSize: 13, fontWeight: 800, color: '#fbbf24' }}
+                      >
+                        {hits.length > 0 ? hits.join(' ') : '—'}
+                      </td>
+                      <td className="num" style={{ fontSize: 13 }}>
+                        {e.metrics
+                          ? `${e.metrics.hits}/${e.k} • P=${fmtPct(e.metrics.precision)}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
