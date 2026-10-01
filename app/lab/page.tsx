@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MLP, buildDataset, mulberry32, splitChrono, topK } from '@/lib/nn';
 import { PRIZE_COUNTS, PRIZE_DIGITS } from '@/lib/constants';
+import { loadDaysLive } from '@/lib/liveDays';
 import type { DayResult, PrizeSet } from '@/lib/types';
 
 const LR = 0.5; // learning rate SGD
@@ -108,6 +109,9 @@ export default function LabPage() {
   const [k, setK] = useState(10);
   const [days, setDays] = useState<DayResult[] | null>(null);
   const [isDemo, setIsDemo] = useState(false);
+  const [liveCount, setLiveCount] = useState(0);
+  const [seedCount, setSeedCount] = useState(0);
+  const [loadProg, setLoadProg] = useState({ done: 0, total: 0 });
   const [phase, setPhase] = useState<Phase>('idle');
   const [prog, setProg] = useState({ epoch: 0, total: 0, loss: 0 });
   const [losses, setLosses] = useState<number[]>([]);
@@ -123,15 +127,19 @@ export default function LabPage() {
     };
   }, []);
 
+  /** Tải 90 ngày gần nhất: mỗi ngày thử live Minh Ngọc trước, fallback seed. */
   const loadDays = async () => {
     setPhase('loading');
     setErr('');
     setResults(null);
     setIsDemo(false);
+    setLoadProg({ done: 0, total: 90 });
     try {
-      const res = await fetch('/api/days');
-      const data = (await res.json()) as DayResult[];
-      setDays(data);
+      const r = await loadDaysLive(90, (done, total) => setLoadProg({ done, total }));
+      if (r.days.length === 0) throw new Error('empty');
+      setDays(r.days);
+      setLiveCount(r.live);
+      setSeedCount(r.seed);
       setPhase('ready');
     } catch {
       setErr('Không tải được dữ liệu. Hãy kiểm tra lại rồi thử lại.');
@@ -237,14 +245,35 @@ export default function LabPage() {
         <h3>1. Dữ liệu</h3>
         <div className="row">
           <button className="ghost" onClick={loadDays} disabled={phase === 'loading' || phase === 'training'}>
-            {phase === 'loading' ? 'Đang tải...' : 'Tải dữ liệu thật'}
+            {phase === 'loading'
+              ? `Đang tải... ${loadProg.done}/${loadProg.total}`
+              : 'Tải dữ liệu thật'}
           </button>
-          {days && (
+          {days && !isDemo && (
             <span className="muted">
-              Đã có <b>{days.length}</b> ngày {isDemo && <span className="pill warn">dữ liệu demo ngẫu nhiên</span>}
+              Đã có <b>{days.length}</b> ngày{' '}
+              <span className={seedCount === 0 ? 'pill good' : 'pill warn'}>
+                {seedCount === 0
+                  ? `${liveCount} ngày trực tiếp Minh Ngọc`
+                  : `${liveCount} trực tiếp • ${seedCount} mẫu`}
+              </span>
+            </span>
+          )}
+          {days && isDemo && (
+            <span className="muted">
+              Đã có <b>{days.length}</b> ngày <span className="pill warn">dữ liệu demo ngẫu nhiên</span>
             </span>
           )}
         </div>
+        {phase === 'loading' && (
+          <div className="progress" style={{ marginTop: 8 }}>
+            <div
+              style={{
+                width: `${loadProg.total > 0 ? (loadProg.done / loadProg.total) * 100 : 0}%`,
+              }}
+            />
+          </div>
+        )}
         {notEnoughData && (
           <div className="note" style={{ marginTop: 12 }}>
             Dữ liệu chưa đủ để thực hành (cần ít nhất {MIN_DAYS} ngày, hiện có{' '}

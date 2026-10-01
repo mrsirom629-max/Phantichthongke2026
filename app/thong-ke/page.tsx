@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { XSMN_SCHEDULE } from '../../lib/constants';
+import { addDays, computeStats, drawsInRange, todayVN } from '../../lib/stats';
+import { loadDaysLive, type LiveDayResult } from '../../lib/liveDays';
 import type { NumberStat, StatsResult } from '../../lib/types';
 
 const DAY_OPTIONS = [7, 14, 30, 60, 90];
@@ -14,31 +16,6 @@ function provinceList(): string[] {
     for (const p of arr) set.add(p.province);
   }
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'));
-}
-
-interface StatsResponse extends Partial<StatsResult> {
-  ok?: boolean;
-  source?: 'live' | 'demo' | 'seed' | 'minhngoc';
-  data?: StatsResult | null;
-  /** API /api/stats trả { source, stats }. */
-  stats?: StatsResult | null;
-  error?: string;
-}
-
-/** Chuẩn hóa response: API /api/stats trả { source: 'seed', stats: StatsResult }. */
-function normalizeResponse(json: unknown): { data: StatsResult | null; source: 'live' | 'demo' } {
-  if (json && typeof json === 'object') {
-    const r = json as StatsResponse;
-    if (r.stats) {
-      const src: 'live' | 'demo' =
-        r.source === 'live' || r.source === 'minhngoc' ? 'live' : 'demo';
-      return { data: r.stats, source: src };
-    }
-    if ('data' in json) {
-      return { data: r.data ?? null, source: r.source === 'live' ? 'live' : 'demo' };
-    }
-  }
-  return { data: (json as StatsResult | null) ?? null, source: 'demo' };
 }
 
 function displayDate(apiDate: string): string {
@@ -103,33 +80,53 @@ export default function StatsPage() {
   const [province, setProvince] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<StatsResult | null>(null);
-  const [source, setSource] = useState<'live' | 'demo'>('demo');
-  const [calculated, setCalculated] = useState(false);
+  const [daysData, setDaysData] = useState<LiveDayResult | null>(null);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
 
-  const fetchStats = useCallback(async (d: number, prov: string) => {
+  /**
+   * Tải N ngày gần nhất: mỗi ngày gọi /api/results (đã thử live Minh Ngọc
+   * trước, fallback seed). Gom và tính thống kê ngay trên trình duyệt.
+   */
+  const loadData = useCallback(async (d: number) => {
     setLoading(true);
     setError(null);
+    setProgress({ done: 0, total: d });
     try {
-      const q = `days=${d}&province=${encodeURIComponent(prov)}`;
-      const res = await fetch(`/api/stats?${q}`);
-      if (!res.ok) throw new Error(`Máy chủ trả về lỗi ${res.status}.`);
-      const json: unknown = await res.json();
-      const { data, source: src } = normalizeResponse(json);
-      setStats(data);
-      setSource(src);
+      const r = await loadDaysLive(d, (done, total) => setProgress({ done, total }));
+      if (r.days.length === 0) {
+        throw new Error('Không tải được ngày nào. Hãy kiểm tra mạng rồi thử lại.');
+      }
+      setDaysData(r);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không tính toán được, vui lòng thử lại.');
-      setStats(null);
+      setError(e instanceof Error ? e.message : 'Không tải được dữ liệu, vui lòng thử lại.');
+      setDaysData(null);
     } finally {
       setLoading(false);
-      setCalculated(true);
     }
   }, []);
 
   useEffect(() => {
-    fetchStats(30, 'all');
-  }, [fetchStats]);
+    loadData(30);
+  }, [loadData]);
+
+  /** Thống kê tính trực tiếp trên dữ liệu ngày đã tải (live + seed). */
+  const stats: StatsResult | null = useMemo(() => {
+    if (!daysData) return null;
+    const to = todayVN();
+    const from = addDays(to, -(days - 1));
+    const draws = drawsInRange(daysData.days, from, to, province);
+    if (draws.length === 0) return null;
+    return computeStats(draws, TOP_N, province);
+  }, [daysData, days, province]);
+
+  /** Nguồn dữ liệu: live toàn bộ / pha trộn / demo toàn bộ. */
+  const source: 'live' | 'mixed' | 'demo' = !daysData
+    ? 'demo'
+    : daysData.seed === 0
+      ? 'live'
+      : daysData.live === 0
+        ? 'demo'
+        : 'mixed';
 
   const summary = useMemo(() => {
     if (!stats) return null;
@@ -155,7 +152,7 @@ export default function StatsPage() {
   const cold = stats ? (stats.cold.length ? stats.cold : deriveList(stats.freq, 'cold')) : [];
   const gan = stats ? (stats.gan.length ? stats.gan : deriveList(stats.freq, 'gan')) : [];
 
-  const handleCalc = () => fetchStats(days, province);
+  const handleCalc = () => loadData(days);
 
   const gridRows: string[][] = useMemo(() => {
     const rows: string[][] = [];
@@ -212,7 +209,16 @@ export default function StatsPage() {
 
       {loading && (
         <div className="card">
-          <p className="muted">Đang tính toán thống kê, vui lòng chờ...</p>
+          <p className="muted">
+            Đang tải dữ liệu trực tiếp từ Minh Ngọc: {progress.done}/{progress.total} ngày...
+          </p>
+          <div className="progress">
+            <div
+              style={{
+                width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%`,
+              }}
+            />
+          </div>
         </div>
       )}
 
@@ -228,17 +234,20 @@ export default function StatsPage() {
         </div>
       )}
 
-      {!loading && !error && calculated && !stats && (
+      {!loading && !error && daysData && !stats && (
         <div className="card">
           <p className="muted">Chưa có dữ liệu cho khoảng này. Hãy thử khoảng khác.</p>
         </div>
       )}
 
-      {!loading && !error && stats && summary && (
+      {!loading && !error && stats && summary && daysData && (
         <div>
           <p>
             <span className={source === 'live' ? 'pill good' : 'pill warn'}>
-              {source === 'live' ? 'Minh Ngọc trực tiếp' : 'Dữ liệu mẫu (demo)'}
+              {source === 'live' && `Minh Ngọc trực tiếp • ${daysData.live} ngày`}
+              {source === 'mixed' &&
+                `Trực tiếp ${daysData.live}/${daysData.live + daysData.seed} ngày • ${daysData.seed} ngày mẫu`}
+              {source === 'demo' && 'Dữ liệu mẫu (demo)'}
             </span>
           </p>
 
@@ -307,7 +316,10 @@ export default function StatsPage() {
           <div className="note">
             Số liệu trên chỉ mang tính <b>thống kê mô tả</b> quá khứ, không có giá trị dự đoán
             kết quả quay thưởng. Nguồn dữ liệu:{' '}
-            {source === 'live' ? 'trực tiếp từ Minh Ngọc.' : 'dữ liệu mẫu (demo) để phát triển giao diện.'}{' '}
+            {source === 'live' && `trực tiếp từ Minh Ngọc (${daysData.live} ngày).`}
+            {source === 'mixed' &&
+              `trực tiếp từ Minh Ngọc (${daysData.live} ngày) + dữ liệu mẫu (${daysData.seed} ngày, do ngày đó chưa lấy được số thật).`}
+            {source === 'demo' && 'dữ liệu mẫu (demo) để phát triển giao diện.'}{' '}
             Xổ số là trò chơi may rủi.
           </div>
         </div>
