@@ -6,7 +6,7 @@
  * 3. Ghi bổ sung vào masterdata (POST) — không trùng, không ghi đè live
  * 4. Dựng bảng chi tiết Thứ | Ngày | Số để kiểm chứng
  */
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { addDays, lotoOf, todayVN } from './stats';
 import { loadSpecificDays } from './liveDays';
 import type { DayResult } from './types';
@@ -32,8 +32,14 @@ export function useMasterdataLoad() {
   const [progress, setProgress] = useState<LoadProgress>({ done: 0, total: 0, phase: '' });
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MasterLoadState | null>(null);
+  // Chặn tải chồng lấn: chỉ một lượt load tại một thời điểm
+  const busyRef = useRef(false);
 
-  const load = async (d: number): Promise<MasterLoadState | null> => {
+  // useCallback + deps rỗng: identity ổn định → useEffect ở page chỉ chạy 1 lần,
+  // không lặp vô hạn (mỗi lần lặp cũ đã gây POST liên tục → commit/deploy dồn dập).
+  const load = useCallback(async (d: number): Promise<MasterLoadState | null> => {
+    if (busyRef.current) return null;
+    busyRef.current = true;
     setLoading(true);
     setError(null);
     setData(null);
@@ -155,9 +161,10 @@ export function useMasterdataLoad() {
       setError(e instanceof Error ? e.message : 'Không tải được dữ liệu.');
       return null;
     } finally {
+      busyRef.current = false;
       setLoading(false);
     }
-  };
+  }, []);
 
   return { loading, progress, error, data, load };
 }
