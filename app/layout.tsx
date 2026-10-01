@@ -20,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <a href="/">Kết quả</a>
               <a href="/thong-ke">Thống kê</a>
               <a href="/lab">Lab mạng nơ-ron</a>
+              <a href="/du-bao">Dự báo</a>
             </nav>
           </div>
         </header>

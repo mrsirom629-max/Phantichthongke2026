@@ -1,0 +1,86 @@
+[
+  {
+    "id": "fc-1790831627759-mlp",
+    "createdAt": "2026-10-01T05:13:47.758Z",
+    "targetDate": "01-10-2026",
+    "model": "mlp",
+    "modelVersion": "mlp-100-h-100-sigmoid-xavier-bce-sgd-v1",
+    "mode": "shadow",
+    "k": 15,
+    "params": {
+      "lookback": 10,
+      "hidden": 64,
+      "epochs": 500,
+      "lr": 0.5,
+      "seed": 42
+    },
+    "dataRange": {
+      "from": "03-07-2026",
+      "to": "30-09-2026",
+      "days": 90,
+      "live": 90,
+      "seed": 0
+    },
+    "numbers": [
+      "59",
+      "16",
+      "96",
+      "11",
+      "42",
+      "85",
+      "17",
+      "78",
+      "04",
+      "71",
+      "29",
+      "43",
+      "28",
+      "86",
+      "22"
+    ],
+    "status": "pending",
+    "note": "Mô phỏng mẫu cho 01/10/2026 bằng script (shadow)"
+  },
+  {
+    "id": "fc-1790831627759-freq",
+    "createdAt": "2026-10-01T05:13:47.758Z",
+    "targetDate": "01-10-2026",
+    "model": "freq",
+    "modelVersion": "freq-topk-v1",
+    "mode": "shadow",
+    "k": 15,
+    "params": {
+      "lookback": 10,
+      "hidden": 0,
+      "epochs": 0,
+      "lr": 0,
+      "seed": 0
+    },
+    "dataRange": {
+      "from": "03-07-2026",
+      "to": "30-09-2026",
+      "days": 90,
+      "live": 90,
+      "seed": 0
+    },
+    "numbers": [
+      "17",
+      "96",
+      "42",
+      "59",
+      "16",
+      "04",
+      "35",
+      "58",
+      "52",
+      "65",
+      "11",
+      "78",
+      "85",
+      "91",
+      "50"
+    ],
+    "status": "pending",
+    "note": "Baseline tần suất cho 01/10/2026 (shadow)"
+  }
+]

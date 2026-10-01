@@ -1,1 +1,1 @@
-{"$schema":"https://openapi.vercel.sh/vercel.json","framework":"nextjs"}
+{"$schema":"https://openapi.vercel.sh/vercel.json","crons":[{"path":"/api/reconcile","schedule":"30 10 * * *"}],"framework":"nextjs"}

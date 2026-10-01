@@ -19,6 +19,7 @@ export interface LiveDayResult {
   live: number; // số ngày lấy trực tiếp từ Minh Ngọc
   seed: number; // số ngày phải dùng dữ liệu mẫu
   total: number; // tổng số ngày yêu cầu
+  perDay: { date: string; source: 'minhngoc' | 'seed' }[];
 }
 
 interface CacheEntry {
@@ -80,17 +81,20 @@ export async function loadDaysLive(
   await Promise.all(Array.from({ length: CONCURRENCY }, (_, w) => worker(w)));
 
   const days: DayResult[] = [];
+  const perDay: { date: string; source: 'minhngoc' | 'seed' }[] = [];
   let live = 0;
   let seed = 0;
-  for (const s of slots) {
+  dates.forEach((date, i) => {
+    const s = slots[i];
+    perDay.push({ date, source: s?.source ?? 'seed' });
     if (s?.day) {
       days.push(s.day);
       if (s.source === 'minhngoc') live += 1;
       else seed += 1;
     }
-  }
+  });
   days.sort((a, b) => cmpDate(a.date, b.date));
-  return { days, live, seed, total: n };
+  return { days, live, seed, total: n, perDay };
 }
 
 /** Xóa cache client (khi muốn ép tải lại toàn bộ). */

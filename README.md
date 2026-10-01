@@ -76,6 +76,30 @@ Lưu ý: API `/api/results` fetch trực tiếp minhngoc.net.vn phía server (c�
 mỗi request chỉ tải 1 trang, không spam). Nếu site nguồn chặn/bận, app tự dùng dữ liệu mẫu
 và ghi rõ trên giao diện.
 
+### Vòng lặp Dự báo → Nhật ký → Đối chiếu 17h30 (trang /du-bao)
+
+- **Mô phỏng**: trang `/du-bao` train MLP (hoặc baseline tần suất) trên 90 ngày live,
+  mô phỏng top-k số cho một ngày mục tiêu. Mọi mô phỏng chạy ở **chế độ shadow**
+  (chỉ ghi nhận để đo lường), điểm số chưa hiệu chuẩn — không phải xác suất trúng.
+- **Nhật ký**: mỗi mô phỏng được ghi vào `data/forecast-log.json` **trước** giờ quay
+  (snapshot trước outcome; cấm backfill).
+- **Đối chiếu 17h30**: Vercel Cron gọi `GET /api/reconcile` lúc 17:30 giờ VN mỗi ngày
+  (`vercel.json`: `30 10 * * *` UTC). Job chỉ đối chiếu với số liệu **live** của ngày
+  mục tiêu; chưa có số thật thì giữ pending.
+- **Mức độ tiên hóa**: precision@k trung bình tích lũy theo mô hình, so với baseline
+  đoán ngẫu nhiên — hiển thị tại `/du-bao`.
+
+Để bật nhật ký chung + cron tự động trên Vercel, thêm Environment Variables:
+
+| Biến | Ý nghĩa |
+|---|---|
+| `GITHUB_TOKEN` | Personal Access Token (classic) với quyền `repo` — để API ghi `data/forecast-log.json` về repo |
+| `GITHUB_REPO` | (tùy chọn) `owner/repo`, mặc định `mrsirom629-max/Phantichthongke2026` |
+| `CRON_SECRET` | (khuyến nghị) chuỗi bí mật — Vercel Cron tự gửi làm `Authorization: Bearer`, route từ chối request lạ |
+
+Không có `GITHUB_TOKEN`: trang /du-bao vẫn chạy đầy đủ, nhật ký lưu tạm trên trình
+duyệt (localStorage) và nút "Đối chiếu ngay" đối chiếu cục bộ khi có số thật.
+
 ## Nguồn dữ liệu & trách nhiệm
 
 - Kết quả: `https://www.minhngoc.net.vn/ket-qua-xo-so/DD-MM-YYYY.html` (chỉ miền Nam).
