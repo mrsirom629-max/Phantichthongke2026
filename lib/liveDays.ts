@@ -48,7 +48,10 @@ async function loadOne(date: string, mien: Mien): Promise<CacheEntry> {
     const source: 'minhngoc' | 'seed' =
       json?.source === 'minhngoc' || json?.source === 'live' ? 'minhngoc' : 'seed';
     const entry: CacheEntry = { source, day: json?.data ?? null };
-    memCache.set(key, entry);
+    // Chỉ cache kết quả live: kết quả seed có thể do lỗi tạm thời phía server
+    // (parser hỏng, trang chưa có số...) — cache nó lại sẽ chặn mọi lần thử
+    // nâng cấp sau trong cùng tab, ngày "mẫu" kẹt mãi không lên được số thật.
+    if (source === 'minhngoc') memCache.set(key, entry);
     return entry;
   } catch {
     // Lỗi mạng/timeout: không cache để lần sau thử lại

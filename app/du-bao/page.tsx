@@ -518,7 +518,32 @@ export default function ForecastPage() {
                     <td>{MODEL_LABELS[e.model]}</td>
                     <td className="num">{e.k}</td>
                     <td className="num" style={{ fontSize: 13 }}>
-                      {e.numbers.join(' ')}
+                      {(() => {
+                        const hitSet = new Set(e.metrics?.hitNumbers ?? []);
+                        return e.numbers.map((n, i) => {
+                          const hit = hitSet.has(n);
+                          return (
+                            <span
+                              key={`${e.id}-${i}`}
+                              style={
+                                hit
+                                  ? {
+                                      fontWeight: 800,
+                                      color: '#fbbf24',
+                                      background: 'rgba(251,191,36,.14)',
+                                      borderRadius: 4,
+                                      padding: '0 3px',
+                                    }
+                                  : undefined
+                              }
+                              title={hit ? 'Số trúng (khớp kết quả thật)' : undefined}
+                            >
+                              {n}
+                              {i < e.numbers.length - 1 ? ' ' : ''}
+                            </span>
+                          );
+                        });
+                      })()}
                     </td>
                     <td>
                       {e.status === 'pending' ? (

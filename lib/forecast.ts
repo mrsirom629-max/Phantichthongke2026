@@ -34,6 +34,7 @@ export interface ForecastDataRange {
 
 export interface ForecastMetrics {
   hits: number;
+  hitNumbers: string[]; // các số mô phỏng TRÚNG (nằm trong tập truth) — để tô đậm trên UI
   precision: number; // hits / k
   recall: number; // hits / truthSize
   truthSize: number; // số lô tô phân biệt thật trong ngày
@@ -87,9 +88,11 @@ export function truthLotoSet(day: DayResult): Set<string> {
 /** Chấm điểm một mô phỏng trước tập truth. */
 export function scoreForecast(numbers: string[], truth: Set<string>): ForecastMetrics {
   const k = numbers.length;
-  const hits = numbers.filter((n) => truth.has(n)).length;
+  const hitNumbers = numbers.filter((n) => truth.has(n));
+  const hits = hitNumbers.length;
   return {
     hits,
+    hitNumbers,
     precision: k > 0 ? hits / k : 0,
     recall: truth.size > 0 ? hits / truth.size : 0,
     truthSize: truth.size,

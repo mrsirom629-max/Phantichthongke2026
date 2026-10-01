@@ -7,7 +7,7 @@ import {
   type ForecastModel,
 } from '@/lib/forecast';
 import { isReadonlyStore, readLog, writeLog, storeBackend, STORE_READONLY } from '@/lib/forecastStore';
-import { reconcileOne } from '@/lib/reconcile';
+import { reconcileOne, recomputeMetrics } from '@/lib/reconcile';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,8 +151,10 @@ export async function DELETE(req: NextRequest) {
   return NextResponse.json({ ok: true, id });
 }
 /**
- * PATCH /api/forecast — đối chiếu thủ công một entry: { id, action: 'reconcile' }.
- * Chỉ đối chiếu khi đã có số liệu LIVE của ngày mục tiêu.
+ * PATCH /api/forecast — { id, action }:
+ * - 'reconcile': đối chiếu thủ công một entry (chỉ khi đã có số liệu LIVE).
+ * - 'backfill': tính lại metrics (bổ sung hitNumbers) cho entry ĐÃ đối chiếu
+ *   từ trước khi metrics có trường hitNumbers.
  */
 export async function PATCH(req: NextRequest) {
   let body: unknown;
@@ -162,12 +164,27 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'Body JSON không hợp lệ.' }, { status: 400 });
   }
   const { id, action } = body as { id?: unknown; action?: unknown };
-  if (typeof id !== 'string' || action !== 'reconcile') {
-    return NextResponse.json({ error: 'Cần { id, action: "reconcile" }.' }, { status: 400 });
+  if (typeof id !== 'string' || (action !== 'reconcile' && action !== 'backfill')) {
+    return NextResponse.json({ error: 'Cần { id, action: "reconcile" | "backfill" }.' }, { status: 400 });
   }
   const log = await readLog();
   const idx = log.findIndex((e) => e.id === id);
   if (idx < 0) return NextResponse.json({ error: 'Không tìm thấy entry.' }, { status: 404 });
+
+  if (action === 'backfill') {
+    const had = Array.isArray(log[idx].metrics?.hitNumbers);
+    const updated = await recomputeMetrics(log[idx]);
+    if (!updated?.metrics) {
+      return NextResponse.json(
+        { backfilled: false, reason: 'Không lấy được số liệu thật của ngày mục tiêu.' },
+        { status: 200 },
+      );
+    }
+    log[idx] = updated;
+    const errRes = await persistLog(log);
+    if (errRes) return errRes;
+    return NextResponse.json({ backfilled: true, changed: !had, entry: updated });
+  }
 
   const updated = await reconcileOne(log[idx]);
   if (!updated) {
@@ -180,8 +197,20 @@ export async function PATCH(req: NextRequest) {
     );
   }
   log[idx] = updated;
+  const errRes = await persistLog(log);
+  if (errRes) return errRes;
+  return NextResponse.json({
+    reconciled: true,
+    entry: updated,
+    modelLabel: MODEL_LABELS[updated.model],
+  });
+}
+
+/** Ghi nhật ký; trả về NextResponse lỗi khi thất bại, null khi thành công. */
+async function persistLog(log: ForecastEntry[]): Promise<NextResponse | null> {
   try {
     await writeLog(log);
+    return null;
   } catch (e) {
     const code = (e as Error & { code?: string }).code;
     if (code === STORE_READONLY || (e as Error).message === STORE_READONLY) {
@@ -192,9 +221,4 @@ export async function PATCH(req: NextRequest) {
     }
     return NextResponse.json({ error: 'Không ghi được nhật ký.' }, { status: 500 });
   }
-  return NextResponse.json({
-    reconciled: true,
-    entry: updated,
-    modelLabel: MODEL_LABELS[updated.model],
-  });
 }

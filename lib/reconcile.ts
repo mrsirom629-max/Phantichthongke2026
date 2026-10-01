@@ -51,3 +51,34 @@ export async function reconcileOne(entry: ForecastEntry): Promise<ForecastEntry 
     metrics,
   };
 }
+
+/**
+ * Tính lại metrics cho entry ĐÃ đối chiếu nhưng thiếu hitNumbers
+ * (entry đối chiếu trước khi metrics có trường hitNumbers).
+ * Trả về entry đã cập nhật metrics, hoặc null khi không lấy được số thật.
+ * Entry đã có hitNumbers được trả về nguyên vẹn (không fetch lại).
+ */
+export async function recomputeMetrics(entry: ForecastEntry): Promise<ForecastEntry | null> {
+  if (entry.status !== 'reconciled') return null;
+  if (Array.isArray(entry.metrics?.hitNumbers)) return entry; // đã có đủ
+
+  const today = todayVN();
+  const mien = entryMien(entry);
+  let d: FetchDetail | null = null;
+
+  if (entry.targetDate === today) {
+    const live = await fetchLive(mien);
+    if (live.stage === 'ok' && live.data && live.data.date === entry.targetDate) {
+      d = live;
+    }
+  }
+  if (!d) {
+    const arch = await fetchDayDetailed(entry.targetDate, mien);
+    if (arch.stage !== 'ok' || !arch.data) return null;
+    d = arch;
+  }
+
+  const truth = truthLotoSet(d.data!);
+  if (truth.size === 0) return null;
+  return { ...entry, metrics: scoreForecast(entry.numbers, truth) };
+}
