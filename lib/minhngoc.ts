@@ -283,38 +283,136 @@ function tryParseFromAnchor(
 
 /**
  * Parse toàn trang kết quả theo ngày. Chỉ lấy mục miền Nam của đúng ngày yêu cầu.
+ * Chiến lược chính: dùng class HTML của trang (table.rightcl / td.giai8…td.giaidb /
+ * div.giaiSo), giới hạn trong mục của đúng ngày (h1.pagetitle → div.box_kqxs).
+ * Dự phòng: parser text-line cũ.
  * Exported để test được (không gọi trực tiếp từ route).
  */
 export function parsePage(html: string, date: string): DayResult | null {
+  return parsePageByClass(html, date) ?? parsePageByText(html, date);
+}
+
+// Map class ô giải → hạng giải
+const PRIZE_CLASS_MAP: [string, keyof PrizeSet][] = [
+  ['giai8', 'tam'],
+  ['giai7', 'bay'],
+  ['giai6', 'sau'],
+  ['giai5', 'nam'],
+  ['giai4', 'tu'],
+  ['giai3', 'ba'],
+  ['giai2', 'nhi'],
+  ['giai1', 'nhat'],
+  ['giaidb', 'db'],
+];
+
+/**
+ * Parser chính: dựa vào class HTML thật của minhngoc.net.vn.
+ * Mỗi tỉnh có <table class="rightcl"> riêng; tên tỉnh trong td.tinh;
+ * các số trong td.giai8…td.giaidb > div.giaiSo.
+ */
+function parsePageByClass(html: string, date: string): DayResult | null {
+  const weekday = weekdayOfDate(date);
+  if (!weekday) return null;
+  const schedule = XSMN_SCHEDULE[weekday];
+  if (!schedule || schedule.length === 0) return null;
+
+  const $ = cheerio.load(html);
+
+  // h1 khớp đúng ngày yêu cầu
+  let h1: ReturnType<typeof $> | null = null;
+  $('h1.pagetitle').each((_, el) => {
+    if (h1) return;
+    const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec($(el).text());
+    if (m && `${m[1]}-${m[2]}-${m[3]}` === date) h1 = $(el);
+  });
+  if (!h1) return null;
+
+  // Các div.box_kqxs sau h1 này, trước h1 của ngày kế tiếp.
+  // (TP. HCM xuất hiện cả thứ 2 và thứ 7 nên phải giới hạn theo ngày,
+  // không quét toàn trang.)
+  const boxes: ReturnType<typeof $>[] = [];
+  let sib = h1.next();
+  while (sib.length > 0 && !sib.is('h1.pagetitle')) {
+    if (sib.is('div.box_kqxs')) boxes.push(sib);
+    sib = sib.next();
+  }
+  const roots: ReturnType<typeof $>[] = boxes.length > 0 ? boxes : [$('body')];
+
+  const provinces: ProvinceResult[] = [];
+  const seen = new Set<string>();
+  for (const root of roots) {
+    root.find('table.rightcl').each((_, t) => {
+      const name = $(t).find('td.tinh').first().text().replace(/\s+/g, ' ').trim();
+      const nn = norm(name);
+      const target = schedule.find((s) => {
+        const tn = norm(s.province);
+        return nn.length >= 3 && tn.length >= 3 && (nn === tn || nn.includes(tn));
+      });
+      if (!target || seen.has(target.province)) return;
+      const prizes = emptyPrizes();
+      let ok = true;
+      for (const [cls, key] of PRIZE_CLASS_MAP) {
+        const nums: string[] = [];
+        $(t)
+          .find(`td.${cls} div.giaiSo`)
+          .each((_, d) => {
+            const v = $(d).text().replace(/\s+/g, '').trim();
+            if (/^\d+$/.test(v)) nums.push(v);
+          });
+        const exp = EXPECTED[key];
+        if (nums.length !== exp.count || !nums.every((s) => s.length === exp.digits)) {
+          ok = false;
+          break;
+        }
+        prizes[key] = nums;
+      }
+      if (ok) {
+        seen.add(target.province);
+        provinces.push({ province: target.province, code: target.code, prizes });
+      }
+    });
+    if (provinces.length > 0) break;
+  }
+  if (provinces.length === 0) return null;
+
+  // Sắp xếp theo đúng lịch quay để thứ tự cột ổn định
+  const order = new Map(schedule.map((s, i) => [s.province, i]));
+  provinces.sort((a, b) => (order.get(a.province) ?? 99) - (order.get(b.province) ?? 99));
+  return { date, weekday, mien: 'nam', provinces };
+}
+
+/**
+ * Parser dự phòng: text-line (khi cấu trúc class thay đổi).
+ * Lưu ý: cột label của chính miền Nam cũng chứa "Giải ĐB" nên section
+ * chỉ kết thúc ở mục Điện toán / miền khác, không cắt ở "giaidb".
+ */
+function parsePageByText(html: string, date: string): DayResult | null {
   const lines = htmlToLines(html);
   if (lines.length === 0) return null;
 
-  // 1. Heading ngày đầu tiên phải khớp ngày yêu cầu (trang còn liệt kê ngày cũ hơn)
+  // 1. Heading khớp đúng ngày yêu cầu (trang có thể chứa link/nav ngày khác
+  //    đứng trước; trang còn liệt kê các ngày cũ hơn phía sau)
   const headingRe = /KẾT QUẢ XỔ SỐ[^\d]*(\d{2})\/(\d{2})\/(\d{4})/i;
   let headIdx = -1;
-  let headDate = '';
   for (let i = 0; i < lines.length; i++) {
     const m = headingRe.exec(lines[i]);
-    if (m) {
+    if (m && `${m[1]}-${m[2]}-${m[3]}` === date) {
       headIdx = i;
-      headDate = `${m[1]}-${m[2]}-${m[3]}`;
       break;
     }
   }
-  if (headIdx < 0 || headDate !== date) return null;
+  if (headIdx < 0) return null;
 
-  // 2. Giới hạn section miền Nam: đến block XSMB ("Giải ĐB") hoặc heading ngày kế tiếp
+  // 2. Giới hạn section miền Nam: đến mục Điện toán / miền Bắc / miền Trung
+  //    hoặc heading ngày kế tiếp. KHÔNG cắt ở "giaidb" vì cột label của chính
+  //    miền Nam cũng chứa "Giải ĐB"; bỏ qua title "KẾT QUẢ XỔ SỐ Miền Nam".
   let endIdx = lines.length;
   for (let i = headIdx + 1; i < lines.length; i++) {
     const n = norm(lines[i]);
-    if (n === 'giaidb' || n.startsWith('giaidb')) {
-      endIdx = i;
-      break;
-    }
-    if (/kết quả xổ số/i.test(lines[i])) {
-      endIdx = i;
-      break;
-    }
+    if (!/ketquaxoso/.test(n)) continue;
+    if (/miennam/.test(n)) continue; // chính mục miền Nam đang xét
+    endIdx = i;
+    break;
   }
 
   // 3. Lịch tỉnh theo thứ của ngày yêu cầu
