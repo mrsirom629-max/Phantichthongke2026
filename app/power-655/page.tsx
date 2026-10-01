@@ -31,6 +31,17 @@ import {
   trainNN55,
   type Portfolio,
 } from '@/lib/nnSolver655';
+import {
+  BASELINE_MEAN_HITS,
+  aggregateByConfig,
+  configSignature,
+  evolutionAdvice,
+  loadEvoEntries,
+  reconcileEntry,
+  saveEvoEntries,
+  type EvoEntry,
+  type SolverConfig,
+} from '@/lib/evolution655';
 import type { TrainProgress } from '@/lib/forecastModel';
 
 const VIEW_KEY = 'p65-view-v1';
@@ -93,6 +104,51 @@ function displayDate(d: string): string {
   return d.replace(/-/g, '/');
 }
 
+/** Biểu đồ hits TB theo thời gian + đường kỳ vọng ngẫu nhiên. */
+function EvoChart({ entries }: { entries: EvoEntry[] }) {
+  const dkey = (s: string) => s.split('-').reverse().join('');
+  const done = entries
+    .filter((e) => e.status === 'done' && e.meanHits !== null)
+    .sort((a, b) => (dkey(a.targetDate || a.afterDate) < dkey(b.targetDate || b.afterDate) ? -1 : 1));
+  if (done.length === 0) return <p className="muted">Chưa có bản ghi nào được đối chiếu.</p>;
+  const W = 700, H = 260, pl = 44, pr = 16, pt = 16, pb = 34;
+  const means = done.map((e) => e.meanHits!);
+  const yMax = Math.max(1.6, ...means, BASELINE_MEAN_HITS) * 1.12;
+  const X = (i: number) =>
+    done.length === 1 ? pl + (W - pl - pr) / 2 : pl + (i * (W - pl - pr)) / (done.length - 1);
+  const Y = (v: number) => pt + (1 - v / yMax) * (H - pt - pb);
+  const yb = Y(BASELINE_MEAN_HITS);
+  const pts = done.map((e, i) => `${X(i).toFixed(1)},${Y(e.meanHits!).toFixed(1)}`).join(' ');
+  const step = Math.max(1, Math.ceil(done.length / 8));
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: 700, height: 'auto' }}>
+      {[0.5, 1.0, 1.5].map((v) => (
+        <g key={v}>
+          <line x1={pl} y1={Y(v)} x2={W - pr} y2={Y(v)} stroke="var(--border)" strokeWidth={1} />
+          <text x={pl - 6} y={Y(v) + 4} textAnchor="end" fontSize={11} fill="var(--muted)">{v.toFixed(1)}</text>
+        </g>
+      ))}
+      <line x1={pl} y1={yb} x2={W - pr} y2={yb} stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="6 4" />
+      <text x={W - pr} y={yb - 6} textAnchor="end" fontSize={12} fill="#f59e0b">
+        kỳ vọng ngẫu nhiên {BASELINE_MEAN_HITS.toFixed(2)}
+      </text>
+      <polyline points={pts} fill="none" stroke="#38bdf8" strokeWidth={2} />
+      {done.map((e, i) => (
+        <g key={e.id}>
+          <circle cx={X(i)} cy={Y(e.meanHits!)} r={4.5} fill="#38bdf8">
+            <title>{`${e.targetDate || 'kỳ sau ' + e.afterDate}: TB ${e.meanHits!.toFixed(2)}/vé (hits ${e.hits!.join('·')})`}</title>
+          </circle>
+          {i % step === 0 && (
+            <text x={X(i)} y={H - 10} textAnchor="middle" fontSize={11} fill="var(--muted)">
+              {(e.targetDate || e.afterDate).slice(0, 5)}
+            </text>
+          )}
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 export default function Power655Page() {
   const saved = useMemo(loadSavedRange, []);
   const [fromDate, setFromDate] = useState(
@@ -121,6 +177,12 @@ export default function Power655Page() {
   const [nnScores, setNnScores] = useState<number[] | null>(null);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [nnErr, setNnErr] = useState('');
+
+  // Vòng lặp tự tiến hóa
+  const [evoEntries, setEvoEntries] = useState<EvoEntry[]>(() => loadEvoEntries());
+  const [evoMsg, setEvoMsg] = useState('');
+  const [backtestDate, setBacktestDate] = useState('');
+  const [evoBusy, setEvoBusy] = useState(false);
 
   /**
    * Tải các kỳ trong khoảng from → to: mỗi trang ngày của Minh Ngọc chứa
@@ -251,6 +313,124 @@ export default function Power655Page() {
       setNnPhase('idle');
     }
   }, [draws, nnLookback, nnHidden, nnEpochs, ticketCount, lambda]);
+
+  /* ── Vòng lặp tự tiến hóa ─────────────────────────────── */
+
+  const persistEvo = (list: EvoEntry[]) => {
+    setEvoEntries(list);
+    saveEvoEntries(list);
+  };
+
+  const currentSolverConfig = (): SolverConfig => ({
+    lookback: nnLookback,
+    hidden: nnHidden,
+    epochs: nnEpochs,
+    tickets: ticketCount,
+    lambda,
+  });
+
+  /** Backtest: gợi ý cho 1 ngày quá khứ (chỉ dùng dữ liệu TRƯỚC ngày đó) rồi đối chiếu ngay. */
+  const runBacktest = useCallback(async () => {
+    if (evoBusy) return;
+    setEvoMsg('');
+    if (!isValidDate(backtestDate)) {
+      setEvoMsg('Chọn ngày backtest hợp lệ.');
+      return;
+    }
+    const key = (s: string) => s.split('-').reverse().join('');
+    if (!draws.some((d) => d.date === backtestDate)) {
+      setEvoMsg(`Ngày ${backtestDate} không có kỳ quay trong dữ liệu đã tải — hãy chọn một ngày có kỳ quay.`);
+      return;
+    }
+    const before = draws.filter((d) => key(d.date) < key(backtestDate));
+    if (before.length < 20) {
+      setEvoMsg(`Chỉ có ${before.length} kỳ trước ${backtestDate} — cần ít nhất 20 kỳ. Hãy tải khoảng ngày rộng hơn.`);
+      return;
+    }
+    setEvoBusy(true);
+    try {
+      const mlp = await trainNN55(before, nnLookback, nnHidden, nnEpochs);
+      const scores = scoreNumbers55(mlp, before, nnLookback);
+      const pf = solvePortfolio(scores, ticketCount, lambda, DEFAULT_CONSTRAINTS);
+      const actual = draws.find((d) => d.date === backtestDate)!;
+      const hits = pf.tickets.map(
+        (t) => t.numbers.filter((n) => actual.numbers.includes(n)).length,
+      );
+      const meanHits = hits.reduce((a, b) => a + b, 0) / hits.length;
+      const entry: EvoEntry = {
+        id: `${Date.now()}`,
+        targetDate: backtestDate,
+        afterDate: '',
+        ky: actual.ky,
+        config: currentSolverConfig(),
+        tickets: pf.tickets.map((t) => t.numbers),
+        totalScore: pf.totalScore,
+        coverage: pf.coverage,
+        createdAt: Date.now(),
+        status: 'done',
+        actual: actual.numbers.slice(),
+        hits,
+        meanHits,
+      };
+      persistEvo([entry, ...evoEntries]);
+      setEvoMsg(
+        `Backtest ${backtestDate} (kỳ ${actual.ky}): trúng TB ${meanHits.toFixed(2)}/vé — kỳ vọng ngẫu nhiên ${BASELINE_MEAN_HITS.toFixed(2)}.`,
+      );
+    } catch (e) {
+      setEvoMsg(e instanceof Error ? e.message : 'Backtest thất bại.');
+    } finally {
+      setEvoBusy(false);
+    }
+  }, [evoBusy, backtestDate, draws, nnLookback, nnHidden, nnEpochs, ticketCount, lambda, evoEntries]);
+
+  /** Lưu gợi ý hiện tại (mục 6) để chờ KQ kỳ tới. */
+  const savePending = useCallback(() => {
+    if (!portfolio) {
+      setEvoMsg('Hãy chạy NN + Solver ở mục 6 trước, rồi lưu gợi ý.');
+      return;
+    }
+    const entry: EvoEntry = {
+      id: `${Date.now()}`,
+      targetDate: '',
+      afterDate: todayVN(),
+      ky: '',
+      config: currentSolverConfig(),
+      tickets: portfolio.tickets.map((t) => t.numbers),
+      totalScore: portfolio.totalScore,
+      coverage: portfolio.coverage,
+      createdAt: Date.now(),
+      status: 'pending',
+      actual: null,
+      hits: null,
+      meanHits: null,
+    };
+    persistEvo([entry, ...evoEntries]);
+    setEvoMsg('Đã lưu gợi ý — khi có KQ kỳ quay mới, tải khoảng ngày chứa nó rồi bấm "Đối chiếu".');
+  }, [portfolio, nnLookback, nnHidden, nnEpochs, ticketCount, lambda, evoEntries]);
+
+  /** Đối chiếu mọi gợi ý đang chờ với dữ liệu đã tải. */
+  const reconcileAll = useCallback(() => {
+    const list = evoEntries.map((e) => reconcileEntry(e, draws));
+    const newly = list.filter((e, i) => e.status === 'done' && evoEntries[i].status === 'pending').length;
+    persistEvo(list);
+    const stillPending = list.filter((e) => e.status === 'pending').length;
+    setEvoMsg(
+      newly > 0
+        ? `Đã đối chiếu ${newly} gợi ý.` + (stillPending > 0 ? ` Còn ${stillPending} gợi ý chưa có KQ — hãy mở rộng khoảng ngày tải.` : '')
+        : 'Chưa đối chiếu được gợi ý nào — hãy tải khoảng ngày chứa các kỳ cần đối chiếu.',
+    );
+  }, [evoEntries, draws]);
+
+  const deleteEvo = useCallback((id: string) => {
+    persistEvo(evoEntries.filter((e) => e.id !== id));
+  }, [evoEntries]);
+
+  // Tự chọn ngày backtest mặc định: ngày có ≥20 kỳ đứng trước nó
+  useEffect(() => {
+    if (!backtestDate && draws.length >= 30) {
+      setBacktestDate(draws[draws.length - 21].date);
+    }
+  }, [draws, backtestDate]);
 
   // Mở trang: khôi phục khoảng đã lưu rồi tải
   useEffect(() => {
@@ -825,6 +1005,158 @@ export default function Power655Page() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>7. Vòng lặp tự tiến hóa — gợi ý → đối chiếu → cải tiến</h3>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Mỗi gợi ý của hệ thống được <b>lưu lại trước giờ quay</b>, sau đó đối chiếu với KQ thật
+          (số trúng/vé). Tích lũy càng nhiều, hệ thống càng có cơ sở để <b>cải tiến cấu hình</b>
+          (lookback, hidden, epoch, λ) — đó là "tự tiến hóa".
+        </p>
+        <div className="note">
+          <b>Tiệm cận trung thực:</b> vì các kỳ độc lập ngẫu nhiên, hits TB/vé của <i>mọi</i> hệ thống
+          đều tiệm cận về kỳ vọng ngẫu nhiên <b>{BASELINE_MEAN_HITS.toFixed(2)}</b> (đường vàng đứt nét).
+          "Chính xác nhất" ở đây nghĩa là: hệ thống tự chứng minh giới hạn đó bằng dữ liệu thật,
+          đồng thời tối ưu những gì tối ưu được — loss của NN, objective của solver, độ bao phủ vé.
+        </div>
+        <div className="row">
+          <div className="field">
+            <label htmlFor="btdate">Ngày backtest</label>
+            <input
+              type="date"
+              id="btdate"
+              value={backtestDate ? toInputValue(backtestDate) : ''}
+              max={toInputValue(todayVN())}
+              onChange={(e) => e.target.value && setBacktestDate(fromInputValue(e.target.value))}
+            />
+          </div>
+          <div className="field">
+            <label>&nbsp;</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={runBacktest} disabled={evoBusy || loading}>
+                {evoBusy ? 'Đang backtest...' : 'Backtest: gợi ý → đối chiếu ngay'}
+              </button>
+              <button className="ghost" onClick={savePending} disabled={!portfolio}>
+                Lưu gợi ý hiện tại (chờ kỳ tới)
+              </button>
+              <button className="ghost" onClick={reconcileAll}>
+                Đối chiếu các gợi ý đang chờ
+              </button>
+            </div>
+          </div>
+        </div>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Backtest dùng <b>cấu hình mục 6</b> và chỉ huấn luyện trên các kỳ <b>trước</b> ngày đã chọn
+          (không nhìn trước tương lai). Nhật ký lưu trên trình duyệt này.
+        </p>
+        {evoMsg && <p>{evoMsg}</p>}
+
+        <h4>Biểu đồ tiến hóa — hits TB/vé theo thời gian</h4>
+        <EvoChart entries={evoEntries} />
+
+        {evoEntries.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <h4>Nhật ký gợi ý ({evoEntries.length})</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Ngày/Kỳ</th>
+                    <th>Cấu hình</th>
+                    <th>Hits từng vé</th>
+                    <th>TB/vé</th>
+                    <th>vs ngẫu nhiên</th>
+                    <th>Bao phủ</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {evoEntries.map((e) => {
+                    const diff = e.meanHits !== null ? e.meanHits - BASELINE_MEAN_HITS : null;
+                    return (
+                      <tr key={e.id}>
+                        <td className="num">
+                          {e.status === 'done' ? (
+                            <span title={e.actual ? `KQ: ${e.actual.map((n) => String(n).padStart(2, '0')).join(' ')}` : ''}>
+                              {e.targetDate || `sau ${e.afterDate}`}{e.ky ? ` (${e.ky})` : ''}
+                            </span>
+                          ) : (
+                            <span className="pill warn">chờ KQ {e.targetDate ? e.targetDate : `sau ${e.afterDate}`}</span>
+                          )}
+                        </td>
+                        <td className="num" style={{ fontSize: 12 }}>{configSignature(e.config)}</td>
+                        <td className="num" title={e.tickets.map((t) => t.map((n) => String(n).padStart(2, '0')).join(' ')).join(' | ')}>
+                          {e.hits ? e.hits.join('·') : '—'}
+                        </td>
+                        <td className="num">{e.meanHits !== null ? <b>{e.meanHits.toFixed(2)}</b> : '—'}</td>
+                        <td className="num" style={{ color: diff === null ? undefined : diff >= 0 ? '#4ade80' : '#f87171' }}>
+                          {diff !== null ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : '—'}
+                        </td>
+                        <td className="num">{e.coverage}/55</td>
+                        <td className="num">
+                          <button className="ghost" style={{ padding: '2px 8px' }} onClick={() => deleteEvo(e.id)}>✕</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {(() => {
+          const aggs = aggregateByConfig(evoEntries);
+          if (aggs.length === 0) return null;
+          return (
+            <div style={{ marginTop: 12 }}>
+              <h4>Bảng xếp hạng cấu hình (theo objective)</h4>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="grid" style={{ maxWidth: 720 }}>
+                  <thead>
+                    <tr>
+                      <th>Cấu hình</th>
+                      <th>Số bản ghi</th>
+                      <th>Hits TB/vé</th>
+                      <th>Bao phủ TB</th>
+                      <th>Objective TB</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {aggs.map((a, i) => (
+                      <tr key={a.sig} style={i === 0 ? { background: 'rgba(74,222,128,0.08)' } : undefined}>
+                        <td className="num">{i === 0 ? '★ ' : ''}{a.sig}</td>
+                        <td className="num">{a.n}</td>
+                        <td className="num">{a.meanHits !== null ? a.meanHits.toFixed(2) : '—'}</td>
+                        <td className="num">{a.meanCoverage.toFixed(1)}</td>
+                        <td className="num">{a.meanObjective.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="muted" style={{ fontSize: 13 }}>
+                Objective cao nhất ≠ trúng nhiều nhất — objective đo <i>chất lượng tối ưu</i> của solver,
+                còn hits đo <i>ngẫu nhiên</i> của kỳ quay.
+              </p>
+            </div>
+          );
+        })()}
+
+        {(() => {
+          const tips = evolutionAdvice(evoEntries);
+          return (
+            <div style={{ marginTop: 12 }}>
+              <h4>Hệ thống tự đề xuất cải tiến</h4>
+              <ul style={{ fontSize: 14, lineHeight: 1.7 }}>
+                {tips.map((t, i) => (
+                  <li key={i}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
