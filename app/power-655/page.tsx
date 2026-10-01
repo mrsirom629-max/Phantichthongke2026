@@ -22,10 +22,40 @@ import {
   topEdges55,
 } from '@/lib/power655';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
-import { addDays, todayVN } from '@/lib/stats';
+import { addDays, cmpDate, diffDays, isValidDate, todayVN } from '@/lib/stats';
 
-const TARGET_DRAWS = 60;
-const CONC = 4;
+const VIEW_KEY = 'p65-view-v1';
+const MAX_RANGE_DAYS = 365;
+const DEFAULT_SPAN = 60; // mặc định 60 ngày (~25 kỳ, đủ cho kiểm định)
+
+/** "DD-MM-YYYY" → "YYYY-MM-DD" cho <input type="date">. */
+function toInputValue(dmy: string): string {
+  const [d, m, y] = dmy.split('-');
+  return `${y}-${m}-${d}`;
+}
+/** "YYYY-MM-DD" → "DD-MM-YYYY". */
+function fromInputValue(ymd: string): string {
+  const [y, m, d] = ymd.split('-');
+  return `${d}-${m}-${y}`;
+}
+
+function loadSavedRange(): { from: string; to: string } | null {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { from?: string; to?: string };
+    if (
+      typeof v.from === 'string' && isValidDate(v.from) &&
+      typeof v.to === 'string' && isValidDate(v.to) &&
+      cmpDate(v.from, v.to) <= 0
+    ) {
+      return { from: v.from, to: v.to };
+    }
+  } catch {
+    /* bỏ qua */
+  }
+  return null;
+}
 
 function Ball({ n, bonus = false, size = 30 }: { n: number; bonus?: boolean; size?: number }) {
   return (
@@ -55,34 +85,63 @@ function displayDate(d: string): string {
 }
 
 export default function Power655Page() {
+  const saved = useMemo(loadSavedRange, []);
+  const [fromDate, setFromDate] = useState(
+    () => saved?.from ?? addDays(todayVN(), -(DEFAULT_SPAN - 1)),
+  );
+  const [toDate, setToDate] = useState(() => saved?.to ?? todayVN());
   const [draws, setDraws] = useState<PowerDraw[]>([]);
   const [liveCount, setLiveCount] = useState(0);
   const [seedCount, setSeedCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [prog, setProg] = useState({ done: 0, total: 0 });
   const [err, setErr] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const [selNum, setSelNum] = useState<number | null>(null); // số 1..55 đang chọn
   const [selGraph, setSelGraph] = useState<number | null>(null); // index 0-based
   const busyRef = useRef(false);
 
   /**
-   * Tải N kỳ gần nhất: mỗi trang ngày của Minh Ngọc chứa ~10 kỳ,
-   * đi lùi theo ngày và khử trùng theo kỳ vé.
+   * Tải các kỳ trong khoảng from → to: mỗi trang ngày của Minh Ngọc chứa
+   * ~10 kỳ, đi lùi từ "to" về "from" và khử trùng theo kỳ vé.
    */
-  const loadDraws = useCallback(async (target: number) => {
+  const loadRange = useCallback(async (from: string, to: string) => {
     if (busyRef.current) return;
+    setFormError(null);
+    if (!isValidDate(from) || !isValidDate(to)) {
+      setFormError('Ngày chưa hợp lệ. Hãy chọn lại từ ngày / đến ngày.');
+      return;
+    }
+    if (cmpDate(from, to) > 0) {
+      setFormError('“Từ ngày” phải trước hoặc bằng “Đến ngày”.');
+      return;
+    }
+    const span = diffDays(from, to) + 1;
+    if (span > MAX_RANGE_DAYS) {
+      setFormError(`Khoảng tối đa ${MAX_RANGE_DAYS} ngày (đang chọn ${span} ngày). Hãy thu hẹp lại.`);
+      return;
+    }
     busyRef.current = true;
     setLoading(true);
     setErr('');
-    setProg({ done: 0, total: target });
+    const estTotal = Math.max(1, Math.round(span * 3 / 7)); // ước lượng: 3 kỳ/tuần
+    setProg({ done: 0, total: estTotal });
     try {
+      try {
+        localStorage.setItem(VIEW_KEY, JSON.stringify({ from, to }));
+      } catch {
+        /* bỏ qua */
+      }
+      const inRange = (d: string) => cmpDate(d, from) >= 0 && cmpDate(d, to) <= 0;
+      const key = (s: string) => s.split('-').reverse().join('');
       const byKy = new Map<string, PowerDraw>();
       let live = 0;
       let seed = 0;
-      let cursor = todayVN();
+      let cursor = to;
       let guard = 0;
-      while (byKy.size < target && guard < 40) {
+      while (guard < 60) {
         guard++;
+        if (cmpDate(cursor, from) < 0) break;
         const res = await fetch(`/api/vietlott?date=${encodeURIComponent(cursor)}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const j = (await res.json()) as {
@@ -97,27 +156,31 @@ export default function Power655Page() {
           continue;
         }
         for (const d of list) {
-          if (!byKy.has(d.ky)) {
+          if (!byKy.has(d.ky) && inRange(d.date)) {
             byKy.set(d.ky, d);
             if (j.source === 'minhngoc') live++;
             else seed++;
           }
         }
-        setProg({ done: Math.min(byKy.size, target), total: target });
-        // Lùi về trước kỳ cũ nhất vừa thấy
-        const key = (s: string) => s.split('-').reverse().join('');
-        const oldest = list.reduce((a, b) => (key(a.date) < key(b.date) ? a : b));
-        const nextCursor = addDays(oldest.date, -12);
+        setProg({ done: byKy.size, total: estTotal });
+        // Dừng khi trang đã chạm mốc cũ hơn "from".
+        // Lùi đúng 1 ngày so với kỳ cũ nhất trang này (khử trùng theo kỳ vé
+        // nên chồng lấp không sao) — đảm bảo không bỏ sót kỳ nào.
+        const pageOldest = list.reduce((a, b) => (key(a.date) < key(b.date) ? a : b)).date;
+        if (cmpDate(pageOldest, from) < 0) break;
+        const nextCursor = addDays(pageOldest, -1);
         if (nextCursor === cursor) break;
         cursor = nextCursor;
       }
-      const key = (s: string) => s.split('-').reverse().join('');
       const all = Array.from(byKy.values()).sort((a, b) =>
         key(a.date) < key(b.date) ? 1 : -1,
       );
-      setDraws(all.slice(0, target));
+      setDraws(all);
       setLiveCount(live);
       setSeedCount(seed);
+      if (all.length === 0) {
+        setErr('Không tìm thấy kỳ quay nào trong khoảng đã chọn.');
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Không tải được dữ liệu.');
     } finally {
@@ -126,8 +189,23 @@ export default function Power655Page() {
     }
   }, []);
 
+  /** ⏭ Kỳ trước: lùi một khoảng cùng độ dài về quá khứ. */
+  const nextCycle = useCallback(() => {
+    const span = diffDays(fromDate, toDate) + 1;
+    const newTo = addDays(fromDate, -1);
+    const newFrom = addDays(newTo, -(span - 1));
+    setFromDate(newFrom);
+    setToDate(newTo);
+    loadRange(newFrom, newTo);
+  }, [fromDate, toDate, loadRange]);
+
+  // Mở trang: khôi phục khoảng đã lưu rồi tải
   useEffect(() => {
-    loadDraws(TARGET_DRAWS);
+    const r = loadSavedRange() ?? {
+      from: addDays(todayVN(), -(DEFAULT_SPAN - 1)),
+      to: todayVN(),
+    };
+    loadRange(r.from, r.to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,27 +264,61 @@ export default function Power655Page() {
 
       <div className="card">
         <div className="row">
-          <button onClick={() => loadDraws(TARGET_DRAWS)} disabled={loading}>
-            {loading ? `Đang tải ${prog.done}/${prog.total} kỳ...` : 'Tải lại dữ liệu'}
-          </button>
+          <div className="field">
+            <label htmlFor="p65from">Từ ngày</label>
+            <input
+              type="date"
+              id="p65from"
+              value={toInputValue(fromDate)}
+              max={toInputValue(toDate)}
+              onChange={(e) => e.target.value && setFromDate(fromInputValue(e.target.value))}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="p65to">Đến ngày</label>
+            <input
+              type="date"
+              id="p65to"
+              value={toInputValue(toDate)}
+              min={toInputValue(fromDate)}
+              max={toInputValue(todayVN())}
+              onChange={(e) => e.target.value && setToDate(fromInputValue(e.target.value))}
+            />
+          </div>
+          <div className="field">
+            <label>&nbsp;</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => loadRange(fromDate, toDate)} disabled={loading}>
+                {loading ? 'Đang tải...' : 'Tải dữ liệu'}
+              </button>
+              <button className="ghost" onClick={nextCycle} disabled={loading}>
+                ⏭ Kỳ trước
+              </button>
+            </div>
+          </div>
           {draws.length > 0 && (
-            <span className="muted">
-              Đã có <b>{draws.length}</b> kỳ{' '}
-              {seedCount === 0 ? (
-                <span className="pill good">{liveCount} kỳ trực tiếp Minh Ngọc</span>
-              ) : (
-                <span className="pill warn">
-                  {liveCount} trực tiếp • {seedCount} mẫu
-                </span>
-              )}
-            </span>
+            <div className="field">
+              <label>&nbsp;</label>
+              <span className="muted">
+                Đã có <b>{draws.length}</b> kỳ{' '}
+                {seedCount === 0 ? (
+                  <span className="pill good">{liveCount} kỳ trực tiếp Minh Ngọc</span>
+                ) : (
+                  <span className="pill warn">
+                    {liveCount} trực tiếp • {seedCount} mẫu
+                  </span>
+                )}
+              </span>
+            </div>
           )}
         </div>
+        {formError && <p style={{ color: '#f87171' }}>{formError}</p>}
         {loading && (
           <div className="progress" style={{ marginTop: 8 }}>
-            <div style={{ width: `${prog.total > 0 ? (prog.done / prog.total) * 100 : 0}%` }} />
+            <div style={{ width: `${prog.total > 0 ? Math.min(100, (prog.done / prog.total) * 100) : 0}%` }} />
           </div>
         )}
+        {loading && <p className="muted">Đã tải {prog.done} kỳ trong khoảng...</p>}
         {err && <p style={{ color: '#f87171' }}>{err}</p>}
       </div>
 
