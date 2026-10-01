@@ -1,13 +1,17 @@
 'use client';
 /**
- * Panel cảnh báo dung lượng lưu trữ.
- * Backend hiện tại: file JSON trong GitHub repo (qua Contents API).
- * - Mỗi file có giới hạn thực tế ~1MB (API base64).
- * - QUAN TRỌNG: mỗi lần ghi = 1 commit → Vercel deploy lại toàn bộ.
+ * Panel dung lượng & backend lưu trữ.
+ * - redis:  Upstash Redis — free 256MB, ghi không tạo commit/deploy.
+ * - github: file JSON trong repo — giới hạn thực tế ~1MB/file,
+ *           mỗi lần ghi = 1 commit → Vercel deploy lại toàn bộ.
  */
 import { useEffect, useState } from 'react';
 
-const FILE_PRACTICAL_MAX = 1024 * 1024; // 1MB — ngưỡng thực tế cho GitHub Contents API
+const LIMITS: Record<string, { bytes: number; label: string }> = {
+  redis: { bytes: 256 * 1024 * 1024, label: 'Upstash Redis (free 256 MB)' },
+  github: { bytes: 1024 * 1024, label: 'File trong GitHub repo (≈1 MB/file)' },
+  file: { bytes: 1024 * 1024, label: 'File local (dev)' },
+};
 const WARN_RATIO = 0.7;
 
 function fmtBytes(n: number): string {
@@ -16,21 +20,26 @@ function fmtBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function fmtLimit(n: number): string {
+  return n >= 1024 * 1024 ? `${Math.round(n / 1024 / 1024)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
+function statusOf(bytes: number, limit: number): 'ok' | 'warn' | 'critical' {
+  const r = bytes / limit;
+  if (r >= 1) return 'critical';
+  if (r >= WARN_RATIO) return 'warn';
+  return 'ok';
+}
+
 interface FileStat {
   name: string;
   desc: string;
   bytes: number;
 }
 
-function statusOf(bytes: number): 'ok' | 'warn' | 'critical' {
-  const r = bytes / FILE_PRACTICAL_MAX;
-  if (r >= 1) return 'critical';
-  if (r >= WARN_RATIO) return 'warn';
-  return 'ok';
-}
-
 export default function StoragePanel({ refreshKey }: { refreshKey?: number | string }) {
   const [files, setFiles] = useState<FileStat[] | null>(null);
+  const [backend, setBackend] = useState<string>('github');
 
   useEffect(() => {
     let alive = true;
@@ -44,17 +53,19 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
         const enc = new TextEncoder();
         const stats: FileStat[] = [];
         if (md) {
+          if (md.backend) setBackend(md.backend);
           stats.push({
-            name: 'data/masterdata.json',
-            desc: `${md.count ?? 0} ngày đã ghi`,
+            name: 'masterdata (ngày đã ghi)',
+            desc: `${md.count ?? 0} ngày`,
             bytes: enc.encode(JSON.stringify(md.days ?? [])).length,
           });
         }
         if (fc) {
+          if (fc.backend) setBackend(fc.backend);
           const entries = fc.entries ?? [];
           stats.push({
-            name: 'data/forecast-log.json',
-            desc: `${entries.length} mô phỏng trong nhật ký`,
+            name: 'forecast-log (nhật ký mô phỏng)',
+            desc: `${entries.length} mô phỏng`,
             bytes: enc.encode(JSON.stringify(entries)).length,
           });
         }
@@ -68,24 +79,21 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
     };
   }, [refreshKey]);
 
+  const lim = LIMITS[backend] ?? LIMITS.github;
   const worst: 'ok' | 'warn' | 'critical' = files
-    ? files.reduce<'ok' | 'warn' | 'critical'>(
-        (acc, f) => {
-          const s = statusOf(f.bytes);
-          if (s === 'critical') return 'critical';
-          if (s === 'warn' && acc === 'ok') return 'warn';
-          return acc;
-        },
-        'ok',
-      )
+    ? files.reduce<'ok' | 'warn' | 'critical'>((acc, f) => {
+        const s = statusOf(f.bytes, lim.bytes);
+        if (s === 'critical') return 'critical';
+        if (s === 'warn' && acc === 'ok') return 'warn';
+        return acc;
+      }, 'ok')
     : 'ok';
 
   return (
     <section className="card" style={{ marginTop: 20 }}>
       <h2>Dung lượng lưu trữ</h2>
       <p className="muted" style={{ fontSize: 13 }}>
-        Kho hiện tại: <b>file JSON trong GitHub repo</b> (ghi qua API). Giới hạn
-        thực tế mỗi file ≈ <b>1 MB</b>.
+        Kho hiện tại: <b>{lim.label}</b>
       </p>
 
       {files ? (
@@ -93,7 +101,7 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
           <table className="grid">
             <thead>
               <tr>
-                <th>File</th>
+                <th>Dữ liệu</th>
                 <th>Nội dung</th>
                 <th>Dung lượng</th>
                 <th>Mức dùng</th>
@@ -102,20 +110,18 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
             </thead>
             <tbody>
               {files.map((f) => {
-                const st = statusOf(f.bytes);
-                const pct = Math.min(100, (f.bytes / FILE_PRACTICAL_MAX) * 100);
+                const st = statusOf(f.bytes, lim.bytes);
+                const pct = Math.min(100, (f.bytes / lim.bytes) * 100);
                 return (
                   <tr key={f.name}>
-                    <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 13 }}>
-                      {f.name}
-                    </td>
+                    <td style={{ fontSize: 13 }}>{f.name}</td>
                     <td>{f.desc}</td>
                     <td className="num">{fmtBytes(f.bytes)}</td>
                     <td style={{ minWidth: 120 }}>
                       <div className="progress" style={{ margin: 0 }}>
                         <div
                           style={{
-                            width: `${pct}%`,
+                            width: `${Math.max(pct, 1.5)}%`,
                             background:
                               st === 'critical'
                                 ? '#f87171'
@@ -126,7 +132,7 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
                         />
                       </div>
                       <div className="muted" style={{ fontSize: 11 }}>
-                        {pct.toFixed(1)}% / 1 MB
+                        {pct.toFixed(1)}% / {fmtLimit(lim.bytes)}
                       </div>
                     </td>
                     <td>
@@ -144,47 +150,40 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
         <p className="muted">Đang đo dung lượng...</p>
       )}
 
-      <div
-        className="note"
-        style={{ marginTop: 12, borderLeft: '3px solid #f0a35e' }}
-      >
-        <b>⚠ Cảnh báo quan trọng hơn dung lượng:</b> mỗi lần ghi vào kho hiện tại
-        tạo <b>1 commit</b> lên GitHub → <b>Vercel deploy lại toàn bộ web</b>.
-        Quét dữ liệu nhiều lần sẽ xếp hàng chục deploy như bạn đã thấy. Đây là lý
-        do nên chuyển kho dữ liệu ra khỏi repo git.
-        {worst !== 'ok' && (
-          <>
-            {' '}
-            Hiện tại file đã <b>{worst === 'warn' ? 'sắp đầy' : 'quá tải'}</b> —
-            nên chuyển ngay.
-          </>
-        )}
-      </div>
+      {backend === 'github' && (
+        <div className="note" style={{ marginTop: 12, borderLeft: '3px solid #f0a35e' }}>
+          <b>⚠ Cảnh báo:</b> với kho file trong repo, mỗi lần ghi tạo <b>1 commit</b>{' '}
+          → <b>Vercel deploy lại toàn bộ web</b>. Nên chuyển sang Upstash Redis
+          (ghi không tạo commit, không deploy).
+          {worst !== 'ok' && (
+            <>
+              {' '}
+              Hiện tại dung lượng đã <b>{worst === 'warn' ? 'sắp đầy' : 'quá tải'}</b>{' '}
+              — nên chuyển ngay.
+            </>
+          )}
+        </div>
+      )}
 
-      <div className="card" style={{ marginTop: 12, background: 'rgba(125,226,168,0.06)' }}>
-        <h3 style={{ marginTop: 0 }}>Đề xuất: Upstash Redis (miễn phí)</h3>
-        <ul style={{ fontSize: 13, lineHeight: 1.8, margin: '8px 0' }}>
-          <li>
-            <b>Free:</b> 10.000 lệnh/ngày • 256 MB lưu trữ — với ~3 KB/ngày xổ số,
-            đủ dùng <b>hàng chục năm</b>.
-          </li>
-          <li>
-            Ghi dữ liệu <b>không tạo commit, không deploy lại</b> — hết cảnh xếp
-            hàng deploy.
-          </li>
-          <li>
-            Đọc/ghi cả cục JSON như hiện tại → chuyển code rất ít (kho đã được
-            trừu tượng sẵn).
-          </li>
-        </ul>
-        <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
-          Cách làm: tạo Redis miễn phí trên <b>upstash.com</b> (hoặc Vercel →
-          Storage → Upstash) → thêm 2 biến môi trường{' '}
-          <code>UPSTASH_REDIS_REST_URL</code> và <code>UPSTASH_REDIS_REST_TOKEN</code>{' '}
-          → báo tôi để chuyển backend. Lựa chọn khác: Supabase Postgres (free
-          500 MB, chuẩn SQL nhưng phải tạo bảng).
-        </p>
-      </div>
+      {backend === 'redis' && (
+        <div className="note" style={{ marginTop: 12, borderLeft: '3px solid #7ee2a8' }}>
+          <b>✓ Kho Redis đang hoạt động:</b> ghi dữ liệu không tạo commit, không
+          deploy lại. Dung lượng free 256 MB — với ~3 KB/ngày xổ số, đủ dùng hàng
+          chục năm.
+        </div>
+      )}
+
+      {backend === 'github' && (
+        <div className="card" style={{ marginTop: 12, background: 'rgba(125,226,168,0.06)' }}>
+          <h3 style={{ marginTop: 0 }}>Đề xuất: Upstash Redis (miễn phí)</h3>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
+            Tạo Redis miễn phí trên <b>upstash.com</b> (vùng Singapore) → thêm 2
+            biến môi trường <code>UPSTASH_REDIS_REST_URL</code> và{' '}
+            <code>UPSTASH_REDIS_REST_TOKEN</code> vào Vercel → Redeploy. Code đã hỗ
+            trợ sẵn, chỉ cần bật biến là tự chuyển.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

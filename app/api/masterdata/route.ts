@@ -4,13 +4,14 @@
  * POST → { days: [{ date, source, day }] } → gộp không trùng (thêm mới / nâng cấp seed→live)
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createJsonStore, isReadonlyError } from '@/lib/jsonStore';
-import { mergeMasterdata, type StoredDay, type IncomingDay } from '@/lib/masterdata';
+import { isReadonlyError } from '@/lib/jsonStore';
+import { createMasterdataStore } from '@/lib/masterdataStore';
+import { mergeMasterdata, type IncomingDay } from '@/lib/masterdata';
 import { isValidDate } from '@/lib/stats';
 
 export const dynamic = 'force-dynamic';
 
-const store = createJsonStore<StoredDay[]>('data/masterdata.json', 'masterdata');
+const store = createMasterdataStore();
 
 export async function GET() {
   const days = await store.read([]);
@@ -20,6 +21,7 @@ export async function GET() {
     from: days.length ? days[0].date : null,
     to: days.length ? days[days.length - 1].date : null,
     readonly: store.isReadonly(),
+    backend: store.backend,
   });
 }
 

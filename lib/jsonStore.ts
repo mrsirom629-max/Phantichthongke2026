@@ -1,24 +1,57 @@
 /**
- * JSON store dùng chung: đọc/ghi một file JSON qua GitHub Contents API
- * (khi có GITHUB_TOKEN) hoặc file local (dev).
- * Dùng cho forecast-log, masterdata, ...
+ * JSON store dùng chung với 3 backend (ưu tiên theo thứ tự):
+ * - redis:  Upstash Redis (khi có UPSTASH_REDIS_REST_URL/TOKEN)
+ * - github: file trong repo qua Contents API (khi có GITHUB_TOKEN)
+ * - file:   file local (dev)
+ *
+ * read:  backend chính → nếu redis TRỐNG thì rớt về github/file
+ *        (giúp chuyển đổi backend không mất dữ liệu cũ).
+ * write: luôn ghi vào backend chính đang cấu hình.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
+import { Redis } from '@upstash/redis';
 
 export const STORE_READONLY = 'STORE_READONLY_NO_TOKEN';
 
+export type StoreBackend = 'redis' | 'github' | 'file';
+
+export interface JsonStoreOptions {
+  relPath: string; // đường dẫn file khi dùng github/file
+  commitPrefix: string; // prefix commit khi ghi qua GitHub
+  redisKey: string; // key khi dùng Redis
+}
+
 export interface JsonStore<T> {
+  backend: StoreBackend;
   read: (fallback: T) => Promise<T>;
   write: (data: T) => Promise<void>;
   isReadonly: () => boolean;
 }
 
-export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonStore<T> {
+function redisConfig(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url, token } : null;
+}
+
+function selectBackend(): StoreBackend {
+  if (redisConfig()) return 'redis';
+  if (process.env.GITHUB_TOKEN) return 'github';
+  return 'file';
+}
+
+export function createJsonStore<T>(
+  opts: JsonStoreOptions,
+  forceBackend?: StoreBackend,
+): JsonStore<T> {
+  const backend: StoreBackend = forceBackend ?? selectBackend();
+  const cfg = redisConfig();
+  const rc: Redis | null = cfg ? new Redis({ url: cfg.url, token: cfg.token }) : null;
+
   const REPO = process.env.GITHUB_REPO || 'mrsirom629-max/Phantichthongke2026';
   const BRANCH = process.env.GITHUB_BRANCH || 'main';
-  const useGithub = (): boolean => !!process.env.GITHUB_TOKEN;
-  const localPath = (): string => path.join(process.cwd(), relPath);
+  const localPath = (): string => path.join(process.cwd(), opts.relPath);
 
   async function fileRead(): Promise<T | null> {
     try {
@@ -30,7 +63,7 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
   }
 
   async function ghRead(): Promise<{ data: T | null; sha: string | null }> {
-    const url = `https://api.github.com/repos/${REPO}/contents/${relPath}?ref=${BRANCH}`;
+    const url = `https://api.github.com/repos/${REPO}/contents/${opts.relPath}?ref=${BRANCH}`;
     const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
@@ -47,9 +80,9 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
   }
 
   async function ghWrite(data: T, sha: string | null): Promise<void> {
-    const url = `https://api.github.com/repos/${REPO}/contents/${relPath}`;
+    const url = `https://api.github.com/repos/${REPO}/contents/${opts.relPath}`;
     const body: Record<string, unknown> = {
-      message: `${commitPrefix}: update`,
+      message: `${opts.commitPrefix}: update`,
       content: Buffer.from(JSON.stringify(data, null, 2), 'utf-8').toString('base64'),
       branch: BRANCH,
     };
@@ -70,6 +103,34 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
     }
   }
 
+  async function redisRead(): Promise<T | null> {
+    if (!rc) return null;
+    try {
+      const v = await rc.get<T>(opts.redisKey);
+      return v ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function redisWrite(data: T): Promise<void> {
+    if (!rc) throw new Error('Redis chưa cấu hình (thiếu UPSTASH_REDIS_REST_URL/TOKEN).');
+    await rc.set(opts.redisKey, data);
+  }
+
+  /** Đọc github/file khi redis trống — dùng trong quá trình chuyển đổi. */
+  async function legacyRead(): Promise<T | null> {
+    if (process.env.GITHUB_TOKEN) {
+      try {
+        const { data } = await ghRead();
+        if (data !== null) return data;
+      } catch {
+        /* bỏ qua, thử file */
+      }
+    }
+    return fileRead();
+  }
+
   function readonlyError(): Error {
     const err = new Error(STORE_READONLY) as Error & { code?: string };
     err.code = STORE_READONLY;
@@ -77,8 +138,14 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
   }
 
   return {
+    backend,
     async read(fallback: T): Promise<T> {
-      if (useGithub()) {
+      if (backend === 'redis') {
+        const v = await redisRead();
+        if (v !== null) return v;
+        return (await legacyRead()) ?? fallback;
+      }
+      if (backend === 'github') {
         try {
           const { data } = await ghRead();
           return data ?? fallback;
@@ -89,7 +156,11 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
       return (await fileRead()) ?? fallback;
     },
     async write(data: T): Promise<void> {
-      if (useGithub()) {
+      if (backend === 'redis') {
+        await redisWrite(data);
+        return;
+      }
+      if (backend === 'github') {
         const { sha } = await ghRead();
         await ghWrite(data, sha);
         return;
@@ -99,7 +170,7 @@ export function createJsonStore<T>(relPath: string, commitPrefix: string): JsonS
       await fs.writeFile(localPath(), JSON.stringify(data, null, 2), 'utf-8');
     },
     isReadonly(): boolean {
-      return !useGithub() && !!process.env.VERCEL;
+      return backend === 'file' && !!process.env.VERCEL;
     },
   };
 }

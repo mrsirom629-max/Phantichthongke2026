@@ -6,7 +6,7 @@ import {
   type ForecastEntry,
   type ForecastModel,
 } from '@/lib/forecast';
-import { isReadonlyStore, readLog, writeLog, STORE_READONLY } from '@/lib/forecastStore';
+import { isReadonlyStore, readLog, writeLog, storeBackend, STORE_READONLY } from '@/lib/forecastStore';
 import { reconcileOne } from '@/lib/reconcile';
 
 export const dynamic = 'force-dynamic';
@@ -19,7 +19,7 @@ function byNewest(a: ForecastEntry, b: ForecastEntry): number {
 export async function GET() {
   const entries = await readLog();
   entries.sort(byNewest);
-  return NextResponse.json({ entries, readonly: isReadonlyStore() });
+  return NextResponse.json({ entries, readonly: isReadonlyStore(), backend: storeBackend() });
 }
 
 function isModel(v: unknown): v is ForecastModel {
