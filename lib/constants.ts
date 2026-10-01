@@ -69,6 +69,12 @@ export const MINHNGOC_BASE = 'https://www.minhngoc.net.vn';
 export const dayUrl = (date: string) => `${MINHNGOC_BASE}/ket-qua-xo-so/${date}.html`;
 /** Trang kết quả XSMB theo ngày: /ket-qua-xo-so/mien-bac/DD-MM-YYYY.html */
 export const dayUrlMB = (date: string) => `${MINHNGOC_BASE}/ket-qua-xo-so/mien-bac/${date}.html`;
+/**
+ * Trang TRỰC TIẾP (live) — có số liệu sớm nhất, ngay khi đang quay:
+ * XSMN ~16:15–16:35, XSMB ~18:15–18:30 (giờ VN).
+ */
+export const liveUrl = (mien: 'nam' | 'bac' = 'nam') =>
+  `${MINHNGOC_BASE}/xo-so-truc-tiep/${mien === 'bac' ? 'mien-bac' : 'mien-nam'}.html`;
 
 /**
  * Đặc tả giải XSMB: số lượng + số chữ số mỗi hạng.

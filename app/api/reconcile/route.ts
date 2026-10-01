@@ -4,13 +4,18 @@ import { reconcileOne } from '@/lib/reconcile';
 import { fmtPct } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
-// Cron chạy 1 lần/ngày lúc 17h30 (giờ VN) — cho phép chạy lâu hơn mặc định.
+// Cron đối chiếu — đọc trang TRỰC TIẾP ở khung giờ quay, sớm nhất có thể:
+//  - XSMN: 16:30–16:40 giờ VN (mỗi 2 phút) — ngay khi đang quay / vừa quay xong
+//  - XSMB: 18:15–18:30 giờ VN (mỗi 3 phút)
+//  - Quét vét cuối ngày: 17:30 giờ VN
+// Chỉ đối chiếu khi đủ 100% số liệu; thiếu thì giữ pending cho tick tiếp theo.
 export const maxDuration = 60;
 
 /**
- * GET /api/reconcile — job đối chiếu hàng ngày (Vercel Cron 17:30 Asia/Ho_Chi_Minh).
- * Duyệt mọi entry pending có targetDate <= hôm nay, đối chiếu với số liệu LIVE,
- * ghi metrics vào nhật ký. Bỏ qua khi chưa có số thật (giữ pending).
+ * GET /api/reconcile — job đối chiếu (Vercel Cron).
+ * Duyệt mọi entry pending có targetDate <= hôm nay, đối chiếu với số liệu LIVE
+ * (ưu tiên trang trực tiếp khi là ngày hôm nay), ghi metrics vào nhật ký.
+ * Bỏ qua khi chưa có số thật (giữ pending).
  *
  * Bảo vệ: nếu đặt CRON_SECRET, Vercel Cron tự gửi Authorization: Bearer <secret>.
  */

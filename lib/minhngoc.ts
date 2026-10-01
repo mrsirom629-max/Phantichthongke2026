@@ -11,9 +11,9 @@
  */
 import * as cheerio from 'cheerio';
 import type { DayResult, Mien, PrizeSet, ProvinceResult } from './types';
-import { MB_PRIZE_SPEC, MINHNGOC_BASE, XSMN_SCHEDULE, dayUrl, dayUrlMB } from './constants';
+import { MB_PRIZE_SPEC, MINHNGOC_BASE, XSMN_SCHEDULE, dayUrl, dayUrlMB, liveUrl } from './constants';
 
-export type FetchStage = 'ok' | 'http-error' | 'fetch-error' | 'parse-error';
+export type FetchStage = 'ok' | 'http-error' | 'fetch-error' | 'parse-error' | 'incomplete';
 
 export interface FetchDetail {
   data: DayResult | null;
@@ -29,6 +29,9 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 const FAIL_CACHE_TTL_MS = 60 * 1000;
 
 const cache = new Map<string, { at: number; detail: FetchDetail }>();
+/** Cache riêng cho trang live: TTL ngắn vì cron đọc mỗi 2–3 phút trong khung giờ quay. */
+const liveCache = new Map<string, { at: number; detail: FetchDetail }>();
+const LIVE_TTL_MS = 90 * 1000;
 
 export async function fetchDayDetailed(date: string, mien: Mien = 'nam'): Promise<FetchDetail> {
   const key = `${mien}:${date}`;
@@ -50,6 +53,56 @@ export async function fetchDay(date: string, mien: Mien = 'nam'): Promise<DayRes
 /** Xóa cache (hữu ích cho test / cưỡng bức làm mới). */
 export function clearCache(): void {
   cache.clear();
+  liveCache.clear();
+}
+
+/**
+ * Đọc trang TRỰC TIẾP (xo-so-truc-tiep/mien-nam.html hoặc mien-bac.html) —
+ * nguồn có số liệu SỚM NHẤT, ngay trong lúc đang quay.
+ *
+ * Khác trang lưu trữ: trang live đang quay dở sẽ THIẾU số → parser yêu cầu
+ * đầy đủ 100% (đủ tỉnh, đủ hạng giải, đúng số chữ số), thiếu là trả về
+ * stage 'incomplete' để caller giữ pending và thử lại ở tick cron tiếp theo.
+ */
+export async function fetchLive(mien: Mien = 'nam'): Promise<FetchDetail> {
+  const normMien: 'nam' | 'bac' = mien === 'bac' ? 'bac' : 'nam';
+  const key = `live:${normMien}`;
+  const hit = liveCache.get(key);
+  if (hit && Date.now() - hit.at < LIVE_TTL_MS) return hit.detail;
+
+  let detail: FetchDetail;
+  try {
+    const res = await fetch(liveUrl(normMien), {
+      headers: {
+        'User-Agent': UA,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9',
+        Referer: `${MINHNGOC_BASE}/`,
+        'Cache-Control': 'no-cache',
+      },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      detail = { data: null, stage: 'http-error', httpStatus: res.status };
+    } else {
+      let html = '';
+      try {
+        html = await res.text();
+      } catch {
+        detail = { data: null, stage: 'fetch-error', httpStatus: res.status };
+      }
+      if (!detail!) {
+        const data = parseLivePage(html, normMien);
+        detail = data
+          ? { data, stage: 'ok', httpStatus: res.status }
+          : { data: null, stage: 'incomplete', httpStatus: res.status };
+      }
+    }
+  } catch {
+    detail = { data: null, stage: 'fetch-error' };
+  }
+  liveCache.set(key, { at: Date.now(), detail });
+  return detail;
 }
 
 async function fetchAndParse(date: string, mien: Mien): Promise<FetchDetail> {
@@ -364,6 +417,111 @@ const PRIZE_CLASS_MAP: [string, keyof PrizeSet][] = [
   ['giai1', 'nhat'],
   ['giaidb', 'db'],
 ];
+
+/**
+ * Parse trang TRỰC TIẾP. Nghiêm ngặt: chỉ trả dữ liệu khi đầy đủ 100%
+ * (đúng ngày, đủ tỉnh theo lịch, đủ hạng giải, đúng số chữ số).
+ * Đang quay dở (thiếu số) → null → caller nhận stage 'incomplete'.
+ * Exported để test được.
+ */
+export function parseLivePage(html: string, mien: Mien = 'nam'): DayResult | null {
+  const $ = cheerio.load(html);
+  const box = $('div#box_tructiepkqxs').first();
+  if (box.length === 0) return null;
+
+  // Tiêu đề live: "TRỰC TIẾP XỔ SỐ Miền Nam - 01/10/2026"
+  // (trong box còn các mục khác như điện toán → phải chọn đúng tiêu đề live)
+  const liveHeads = box
+    .find('.title')
+    .filter((_, el) => /TRỰC TIẾP XỔ SỐ/i.test($(el).text()));
+  if (liveHeads.length === 0) return null;
+  const liveHead = liveHeads.first();
+  const titleText = liveHead.text();
+  const sec = liveHead.closest('div.box_kqxs');
+  const scope = sec.length > 0 ? sec : box;
+  const dm = /(\d{2})\/(\d{2})\/(\d{4})/.exec(titleText);
+  if (!dm) return null;
+  const date = `${dm[1]}-${dm[2]}-${dm[3]}`;
+  const weekday = weekdayOfDate(date);
+  if (!weekday) return null;
+
+  if (mien === 'bac') {
+    const table = scope.find('table.bkqtinhmienbac').first();
+    if (table.length === 0) return null;
+    const prizes = emptyPrizes();
+    const MB_CLASS_MAP: [string, keyof PrizeSet][] = [
+      ['giaidb', 'db'],
+      ['giai1', 'nhat'],
+      ['giai2', 'nhi'],
+      ['giai3', 'ba'],
+      ['giai4', 'tu'],
+      ['giai5', 'nam'],
+      ['giai6', 'sau'],
+      ['giai7', 'bay'],
+    ];
+    for (const [cls, key] of MB_CLASS_MAP) {
+      const nums: string[] = [];
+      table
+        .find(`td.${cls} > div`)
+        .each((_, d) => {
+          const v = $(d).text().replace(/\s+/g, '').trim();
+          if (/^\d+$/.test(v)) nums.push(v);
+        });
+      const exp = MB_PRIZE_SPEC[key];
+      if (nums.length !== exp.count || !nums.every((s) => s.length === exp.digits)) {
+        return null; // thiếu / sai → đang quay dở hoặc cấu trúc đổi
+      }
+      prizes[key] = nums;
+    }
+    return {
+      date,
+      weekday,
+      mien: 'bac',
+      provinces: [{ province: 'Miền Bắc', code: 'XSMB', prizes }],
+    };
+  }
+
+  // Miền Nam: mỗi tỉnh một table.rightcl như trang lưu trữ
+  const schedule = XSMN_SCHEDULE[weekday];
+  if (!schedule || schedule.length === 0) return null;
+  const provinces: ProvinceResult[] = [];
+  const seen = new Set<string>();
+  scope.find('table.rightcl').each((_, t) => {
+    const name = $(t).find('td.tinh').first().text().replace(/\s+/g, ' ').trim();
+    const nn = norm(name);
+    const target = schedule.find((s) => {
+      const tn = norm(s.province);
+      return nn.length >= 3 && tn.length >= 3 && (nn === tn || nn.includes(tn));
+    });
+    if (!target || seen.has(target.province)) return;
+    const prizes = emptyPrizes();
+    let ok = true;
+    for (const [cls, key] of PRIZE_CLASS_MAP) {
+      const nums: string[] = [];
+      $(t)
+        .find(`td.${cls} > div`)
+        .each((_, d) => {
+          const v = $(d).text().replace(/\s+/g, '').trim();
+          if (/^\d+$/.test(v)) nums.push(v);
+        });
+      const exp = EXPECTED[key];
+      if (nums.length !== exp.count || !nums.every((s) => s.length === exp.digits)) {
+        ok = false;
+        break;
+      }
+      prizes[key] = nums;
+    }
+    if (ok) {
+      seen.add(target.province);
+      provinces.push({ province: target.province, code: target.code, prizes });
+    }
+  });
+  // Live MN phải đủ TẤT CẢ tỉnh của ngày (thiếu 1 tỉnh = đang quay dở)
+  if (provinces.length !== schedule.length) return null;
+  const order = new Map(schedule.map((s, i) => [s.province, i]));
+  provinces.sort((a, b) => (order.get(a.province) ?? 99) - (order.get(b.province) ?? 99));
+  return { date, weekday, mien: 'nam', provinces };
+}
 
 /**
  * Parser chính: dựa vào class HTML thật của minhngoc.net.vn.
