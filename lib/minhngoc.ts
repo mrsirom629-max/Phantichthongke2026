@@ -10,8 +10,8 @@
  * - Trả về kèm `stage` để chẩn đoán: ok | http-error | fetch-error | parse-error.
  */
 import * as cheerio from 'cheerio';
-import type { DayResult, PrizeSet, ProvinceResult } from './types';
-import { MINHNGOC_BASE, XSMN_SCHEDULE, dayUrl } from './constants';
+import type { DayResult, Mien, PrizeSet, ProvinceResult } from './types';
+import { MB_PRIZE_SPEC, MINHNGOC_BASE, XSMN_SCHEDULE, dayUrl, dayUrlMB } from './constants';
 
 export type FetchStage = 'ok' | 'http-error' | 'fetch-error' | 'parse-error';
 
@@ -30,20 +30,21 @@ const FAIL_CACHE_TTL_MS = 60 * 1000;
 
 const cache = new Map<string, { at: number; detail: FetchDetail }>();
 
-export async function fetchDayDetailed(date: string): Promise<FetchDetail> {
-  const hit = cache.get(date);
+export async function fetchDayDetailed(date: string, mien: Mien = 'nam'): Promise<FetchDetail> {
+  const key = `${mien}:${date}`;
+  const hit = cache.get(key);
   if (hit) {
     const ttl = hit.detail.stage === 'ok' ? CACHE_TTL_MS : FAIL_CACHE_TTL_MS;
     if (Date.now() - hit.at < ttl) return hit.detail;
   }
-  const detail = await fetchAndParse(date);
-  cache.set(date, { at: Date.now(), detail });
+  const detail = await fetchAndParse(date, mien);
+  cache.set(key, { at: Date.now(), detail });
   return detail;
 }
 
 /** Giữ API cũ: chỉ trả dữ liệu (null khi lỗi → caller fallback). */
-export async function fetchDay(date: string): Promise<DayResult | null> {
-  return (await fetchDayDetailed(date)).data;
+export async function fetchDay(date: string, mien: Mien = 'nam'): Promise<DayResult | null> {
+  return (await fetchDayDetailed(date, mien)).data;
 }
 
 /** Xóa cache (hữu ích cho test / cưỡng bức làm mới). */
@@ -51,9 +52,10 @@ export function clearCache(): void {
   cache.clear();
 }
 
-async function fetchAndParse(date: string): Promise<FetchDetail> {
-  // ?mut=mn = "miền ưu tiên: miền Nam" (đúng URL người dùng cung cấp)
-  const url = `${dayUrl(date)}?mut=mn`;
+async function fetchAndParse(date: string, mien: Mien): Promise<FetchDetail> {
+  // MN: ?mut=mn = "miền ưu tiên: miền Nam" (đúng URL người dùng cung cấp)
+  // MB: trang riêng /ket-qua-xo-so/mien-bac/DD-MM-YYYY.html
+  const url = mien === 'bac' ? dayUrlMB(date) : `${dayUrl(date)}?mut=mn`;
   let res: Response;
   try {
     res = await fetch(url, {
@@ -76,7 +78,7 @@ async function fetchAndParse(date: string): Promise<FetchDetail> {
   } catch {
     return { data: null, stage: 'fetch-error', httpStatus: res.status };
   }
-  const data = parsePage(html, date);
+  const data = mien === 'bac' ? parsePageMB(html, date) : parsePage(html, date);
   return data
     ? { data, stage: 'ok', httpStatus: res.status }
     : { data: null, stage: 'parse-error', httpStatus: res.status };
@@ -292,7 +294,65 @@ export function parsePage(html: string, date: string): DayResult | null {
   return parsePageByClass(html, date) ?? parsePageByText(html, date);
 }
 
-// Map class ô giải → hạng giải
+/**
+ * Parse trang XSMB theo ngày (một đài duy nhất).
+ * Cấu trúc: div.box_kqxs > table (bkqmienbac) với các hàng giải,
+ * ô td.giaidb / td.giai1…td.giai7 chứa các div số riêng lẻ.
+ * XSMB: ĐB 5 số, nhất 5 số, nhì 2×5, ba 6×5, tư 4×4, năm 6×4, sáu 3×3,
+ * bảy 4×2 — tổng 27 giải, không có giải tám.
+ */
+export function parsePageMB(html: string, date: string): DayResult | null {
+  const weekday = weekdayOfDate(date);
+  if (!weekday) return null;
+  const $ = cheerio.load(html);
+  const box = $('div.box_kqxs').first();
+  if (box.length === 0) return null;
+
+  // Xác thực đúng ngày: td.ngay chứa "Ngày: 30/09/2026 ..."
+  const ngayText = box.find('td.ngay').first().text();
+  const dm = /(\d{2})\/(\d{2})\/(\d{4})/.exec(ngayText);
+  if (!dm || `${dm[1]}-${dm[2]}-${dm[3]}` !== date) return null;
+
+  const MB_CLASS_MAP: [string, keyof PrizeSet][] = [
+    ['giaidb', 'db'],
+    ['giai1', 'nhat'],
+    ['giai2', 'nhi'],
+    ['giai3', 'ba'],
+    ['giai4', 'tu'],
+    ['giai5', 'nam'],
+    ['giai6', 'sau'],
+    ['giai7', 'bay'],
+  ];
+  const prizes = emptyPrizes();
+  for (const [cls, key] of MB_CLASS_MAP) {
+    const cell = box.find(`td.${cls}`).first();
+    if (cell.length === 0) return null;
+    const nums: string[] = [];
+    const divs = cell.children('div');
+    if (divs.length > 0) {
+      divs.each((_, d) => {
+        const v = $(d).text().replace(/\s+/g, '').trim();
+        if (/^\d+$/.test(v)) nums.push(v);
+      });
+    } else {
+      const v = cell.text().replace(/\s+/g, '').trim();
+      if (/^\d+$/.test(v)) nums.push(v);
+    }
+    const exp = MB_PRIZE_SPEC[key];
+    if (nums.length !== exp.count || !nums.every((s) => s.length === exp.digits)) {
+      return null;
+    }
+    prizes[key] = nums;
+  }
+  return {
+    date,
+    weekday,
+    mien: 'bac',
+    provinces: [{ province: 'Miền Bắc', code: 'XSMB', prizes }],
+  };
+}
+
+// Map class ô giải → hạng giải (XSMN)
 const PRIZE_CLASS_MAP: [string, keyof PrizeSet][] = [
   ['giai8', 'tam'],
   ['giai7', 'bay'],

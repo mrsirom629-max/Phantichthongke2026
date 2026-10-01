@@ -9,7 +9,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { addDays, isValidDate, lotoOf, todayVN } from './stats';
 import { loadSpecificDays } from './liveDays';
-import type { DayResult } from './types';
+import type { DayResult, Mien } from './types';
 import type { StoredDay } from './masterdata';
 import type { MasterRow, MasterSummary } from '../components/MasterdataPanel';
 
@@ -39,18 +39,20 @@ export function useMasterdataLoad() {
   // không lặp vô hạn (mỗi lần lặp cũ đã gây POST liên tục → commit/deploy dồn dập).
   // endDate: ngày cuối của vòng quét (DD-MM-YYYY). Bỏ trống = hôm nay.
   // Mỗi vòng là một cửa sổ MỚI lùi về quá khứ, không đè lên vòng cũ.
-  const load = useCallback(async (d: number, endDate?: string): Promise<MasterLoadState | null> => {
-    if (busyRef.current) return null;
-    busyRef.current = true;
-    setLoading(true);
-    setError(null);
-    setData(null);
-    try {
-      // 1. Masterdata hiện có
-      setProgress({ done: 0, total: 0, phase: 'Đọc masterdata' });
-      const mdRes = await fetch('/api/masterdata');
-      if (!mdRes.ok) throw new Error('Không đọc được masterdata.');
-      let all = ((await mdRes.json()) as { days: StoredDay[] }).days ?? [];
+  // mien: kho dữ liệu theo miền ('nam' | 'bac').
+  const load = useCallback(
+    async (d: number, endDate?: string, mien: Mien = 'nam'): Promise<MasterLoadState | null> => {
+      if (busyRef.current) return null;
+      busyRef.current = true;
+      setLoading(true);
+      setError(null);
+      setData(null);
+      try {
+        // 1. Masterdata hiện có (theo miền)
+        setProgress({ done: 0, total: 0, phase: 'Đọc masterdata' });
+        const mdRes = await fetch(`/api/masterdata?mien=${mien}`);
+        if (!mdRes.ok) throw new Error('Không đọc được masterdata.');
+        let all = ((await mdRes.json()) as { days: StoredDay[] }).days ?? [];
 
       const to = endDate && isValidDate(endDate) ? endDate : todayVN();
       const from = addDays(to, -(d - 1));
@@ -68,8 +70,11 @@ export function useMasterdataLoad() {
       let upgradedDates: string[] = [];
       if (toFetch.length > 0) {
         setProgress({ done: 0, total: toFetch.length, phase: 'Tải ngày còn thiếu từ Minh Ngọc' });
-        const r = await loadSpecificDays(toFetch, (done, total) =>
-          setProgress({ done, total, phase: 'Tải ngày còn thiếu từ Minh Ngọc' }),
+        const r = await loadSpecificDays(
+          toFetch,
+          (done, total) =>
+            setProgress({ done, total, phase: 'Tải ngày còn thiếu từ Minh Ngọc' }),
+          mien,
         );
         const incoming = r.perDay
           .map((p) => {
@@ -88,7 +93,7 @@ export function useMasterdataLoad() {
             total: toFetch.length,
             phase: 'Ghi bổ sung vào masterdata',
           });
-          const sres = await fetch('/api/masterdata', {
+          const sres = await fetch(`/api/masterdata?mien=${mien}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ days: incoming }),
@@ -103,7 +108,7 @@ export function useMasterdataLoad() {
           };
           addedDates = sj.addedDates ?? [];
           upgradedDates = sj.upgradedDates ?? [];
-          const md2 = (await (await fetch('/api/masterdata')).json()) as {
+          const md2 = (await (await fetch(`/api/masterdata?mien=${mien}`)).json()) as {
             days: StoredDay[];
           };
           all = md2.days ?? [];

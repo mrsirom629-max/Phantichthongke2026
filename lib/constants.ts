@@ -67,6 +67,24 @@ export const PRIZE_DIGITS: Record<string, number> = {
 export const MINHNGOC_BASE = 'https://www.minhngoc.net.vn';
 /** Trang kết quả theo ngày: /ket-qua-xo-so/DD-MM-YYYY.html */
 export const dayUrl = (date: string) => `${MINHNGOC_BASE}/ket-qua-xo-so/${date}.html`;
+/** Trang kết quả XSMB theo ngày: /ket-qua-xo-so/mien-bac/DD-MM-YYYY.html */
+export const dayUrlMB = (date: string) => `${MINHNGOC_BASE}/ket-qua-xo-so/mien-bac/${date}.html`;
+
+/**
+ * Đặc tả giải XSMB: số lượng + số chữ số mỗi hạng.
+ * Khác XSMN: ĐB 5 số (không 6), không có giải tám, 27 giải tổng cộng.
+ */
+export const MB_PRIZE_SPEC: Record<string, { count: number; digits: number }> = {
+  db: { count: 1, digits: 5 },
+  nhat: { count: 1, digits: 5 },
+  nhi: { count: 2, digits: 5 },
+  ba: { count: 6, digits: 5 },
+  tu: { count: 4, digits: 4 },
+  nam: { count: 6, digits: 4 },
+  sau: { count: 3, digits: 3 },
+  bay: { count: 4, digits: 2 },
+  tam: { count: 0, digits: 2 },
+};
 
 /** Tên thứ trong tuần từ Date (giờ VN). */
 export function weekdayOf(d: Date): string {

@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   // 2. masterdata → redis (đi qua mergeMasterdata để đảm bảo không trùng, sắp xếp đúng)
   try {
-    const dst = createMasterdataStore('redis');
+    const dst = createMasterdataStore('nam', 'redis');
     if (body && Array.isArray(body.masterdata)) {
       const incoming = (body.masterdata as StoredDay[]).map((d) => ({
         date: d.date,
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
         via: 'direct-push',
       };
     } else {
-      const src = createMasterdataStore('github');
+      const src = createMasterdataStore('nam', 'github');
       const days = await src.read([]);
       if (days.length > 0) {
         await dst.write(days);

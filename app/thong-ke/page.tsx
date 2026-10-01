@@ -6,7 +6,7 @@ import { addDays, cmpDate, computeStats, diffDays, drawsInRange, isValidDate, to
 import { useMasterdataLoad } from '../../lib/useMasterdataLoad';
 import MasterdataPanel from '../../components/MasterdataPanel';
 import StoragePanel from '../../components/StoragePanel';
-import type { NumberStat, StatsResult } from '../../lib/types';
+import type { Mien, NumberStat, StatsResult } from '../../lib/types';
 
 const TOP_N = 10;
 const MAX_RANGE_DAYS = 365;
@@ -88,7 +88,11 @@ function StatTable({ title, rows }: { title: string; rows: NumberStat[] }) {
 }
 
 export default function StatsPage() {
-  const provinces = useMemo(provinceList, []);
+  const [mien, setMien] = useState<Mien>('nam');
+  const provinces = useMemo(
+    () => (mien === 'bac' ? ['Miền Bắc'] : provinceList()),
+    [mien],
+  );
   const [fromDate, setFromDate] = useState(() => addDays(todayVN(), -29));
   const [toDate, setToDate] = useState(() => todayVN());
   const [province, setProvince] = useState<string>('all');
@@ -109,13 +113,13 @@ export default function StatsPage() {
   const windowEndRef = useRef<string | null>(null);
 
   /**
-   * Quét một vòng từ from → to QUA MASTERDATA.
+   * Quét một vòng từ from → to QUA MASTERDATA (kho riêng theo miền).
    * - reset=true: quét đúng khoảng đã chọn (vòng 1).
    * - reset=false: quét vòng tiếp theo lùi về quá khứ (không đè vòng cũ).
    * Chỉ tải những ngày còn thiếu, ghi bổ sung không trùng.
    */
   const loadData = useCallback(
-    async (from: string, to: string, reset: boolean) => {
+    async (from: string, to: string, reset: boolean, m: Mien) => {
       setFormError(null);
       if (!isValidDate(from) || !isValidDate(to)) {
         setFormError('Ngày chưa hợp lệ. Hãy chọn lại từ ngày / đến ngày.');
@@ -130,7 +134,7 @@ export default function StatsPage() {
         setFormError(`Khoảng tối đa ${MAX_RANGE_DAYS} ngày (đang chọn ${d} ngày). Hãy thu hẹp lại.`);
         return;
       }
-      const st = await load(d, to);
+      const st = await load(d, to, m);
       if (st) {
         // Vòng sau bắt đầu từ ngày liền trước ngày đầu vòng này
         windowEndRef.current = addDays(st.summary.windowFrom, -1);
@@ -142,8 +146,23 @@ export default function StatsPage() {
 
   useEffect(() => {
     const to = todayVN();
-    loadData(addDays(to, -29), to, true);
+    loadData(addDays(to, -29), to, true, 'nam');
   }, [loadData]);
+
+  /** Đổi miền: reset vòng quét, tải lại từ 30 ngày gần nhất của miền mới. */
+  const handleMien = (m: Mien) => {
+    if (m === mien || loading) return;
+    setMien(m);
+    setProvince('all');
+    setCycle(0);
+    setFormError(null);
+    windowEndRef.current = null;
+    const to = todayVN();
+    const from = addDays(to, -29);
+    setFromDate(from);
+    setToDate(to);
+    loadData(from, to, true, m);
+  };
 
   /** Dữ liệu ngày trong khoảng — lấy từ masterdata (đã sắp xếp tăng dần). */
   const daysData = useMemo(
@@ -206,7 +225,7 @@ export default function StatsPage() {
   const cold = stats ? (stats.cold.length ? stats.cold : deriveList(stats.freq, 'cold')) : [];
   const gan = stats ? (stats.gan.length ? stats.gan : deriveList(stats.freq, 'gan')) : [];
 
-  const handleCalc = () => loadData(fromDate, toDate, true);
+  const handleCalc = () => loadData(fromDate, toDate, true, mien);
   const handleNextCycle = () => {
     if (!isValidDate(fromDate) || !isValidDate(toDate) || cmpDate(fromDate, toDate) > 0) {
       setFormError('Hãy chọn khoảng ngày hợp lệ trước.');
@@ -217,7 +236,7 @@ export default function StatsPage() {
     const newFrom = addDays(newTo, -(d - 1));
     setFromDate(newFrom);
     setToDate(newTo);
-    loadData(newFrom, newTo, false);
+    loadData(newFrom, newTo, false, mien);
   };
 
   const gridRows: string[][] = useMemo(() => {
@@ -243,6 +262,22 @@ export default function StatsPage() {
 
       <div className="card">
         <div className="row">
+          <div className="field">
+            <label>Miền</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['nam', 'bac'] as Mien[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mien === m ? '' : 'ghost'}
+                  onClick={() => handleMien(m)}
+                  disabled={loading}
+                >
+                  {m === 'nam' ? 'Miền Nam' : 'Miền Bắc'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="field">
             <label htmlFor="fromDate">Từ ngày</label>
             <input

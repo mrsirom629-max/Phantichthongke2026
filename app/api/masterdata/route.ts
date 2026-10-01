@@ -1,19 +1,27 @@
 /**
- * API masterdata — kho ngày đã tải, bền vững.
- * GET  → { days, count, from, to, readonly }
- * POST → { days: [{ date, source, day }] } → gộp không trùng (thêm mới / nâng cấp seed→live)
+ * API masterdata — kho ngày đã tải, bền vững (theo miền).
+ * GET  /api/masterdata?mien=nam|bac → { days, count, from, to, readonly, backend, mien }
+ * POST /api/masterdata?mien=nam|bac → { days: [{ date, source, day }] } → gộp không trùng
+ *
+ * Kho theo miền: 'nam' → key cũ xs26:masterdata (giữ dữ liệu hiện có),
+ * 'bac' → key mới xs26:masterdata:mb.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { isReadonlyError } from '@/lib/jsonStore';
 import { createMasterdataStore } from '@/lib/masterdataStore';
 import { mergeMasterdata, type IncomingDay } from '@/lib/masterdata';
 import { isValidDate } from '@/lib/stats';
+import type { Mien } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const store = createMasterdataStore();
+function mienOf(req: NextRequest): Mien {
+  return req.nextUrl.searchParams.get('mien') === 'bac' ? 'bac' : 'nam';
+}
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const mien = mienOf(req);
+  const store = createMasterdataStore(mien);
   const days = await store.read([]);
   return NextResponse.json({
     days,
@@ -22,6 +30,7 @@ export async function GET() {
     to: days.length ? days[days.length - 1].date : null,
     readonly: store.isReadonly(),
     backend: store.backend,
+    mien,
   });
 }
 
@@ -39,6 +48,8 @@ function validIncoming(x: unknown): x is IncomingDay {
 }
 
 export async function POST(req: NextRequest) {
+  const mien = mienOf(req);
+  const store = createMasterdataStore(mien);
   let body: unknown;
   try {
     body = await req.json();

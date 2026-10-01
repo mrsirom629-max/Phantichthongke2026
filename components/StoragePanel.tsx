@@ -45,19 +45,28 @@ export default function StoragePanel({ refreshKey }: { refreshKey?: number | str
     let alive = true;
     (async () => {
       try {
-        const [md, fc] = await Promise.all([
-          fetch('/api/masterdata').then((r) => (r.ok ? r.json() : null)),
+        const [mdN, mdB, fc] = await Promise.all([
+          fetch('/api/masterdata?mien=nam').then((r) => (r.ok ? r.json() : null)),
+          fetch('/api/masterdata?mien=bac').then((r) => (r.ok ? r.json() : null)),
           fetch('/api/forecast').then((r) => (r.ok ? r.json() : null)),
         ]);
         if (!alive) return;
         const enc = new TextEncoder();
         const stats: FileStat[] = [];
-        if (md) {
-          if (md.backend) setBackend(md.backend);
+        if (mdN) {
+          if (mdN.backend) setBackend(mdN.backend);
           stats.push({
-            name: 'masterdata (ngày đã ghi)',
-            desc: `${md.count ?? 0} ngày`,
-            bytes: enc.encode(JSON.stringify(md.days ?? [])).length,
+            name: 'masterdata Miền Nam',
+            desc: `${mdN.count ?? 0} ngày`,
+            bytes: enc.encode(JSON.stringify(mdN.days ?? [])).length,
+          });
+        }
+        if (mdB) {
+          if (mdB.backend) setBackend(mdB.backend);
+          stats.push({
+            name: 'masterdata Miền Bắc',
+            desc: `${mdB.count ?? 0} ngày`,
+            bytes: enc.encode(JSON.stringify(mdB.days ?? [])).length,
           });
         }
         if (fc) {

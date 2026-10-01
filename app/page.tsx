@@ -53,6 +53,7 @@ function normalizeResponse(json: unknown): {
 
 export default function HomePage() {
   const [dateIso, setDateIso] = useState<string>(todayIso);
+  const [mien, setMien] = useState<Mien>('nam');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DayResult | null>(null);
@@ -60,12 +61,14 @@ export default function HomePage() {
   const [note, setNote] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
-  const fetchResults = useCallback(async (iso: string) => {
+  const fetchResults = useCallback(async (iso: string, m: Mien) => {
     if (!iso) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/results?date=${encodeURIComponent(toApiDate(iso))}`);
+      const res = await fetch(
+        `/api/results?date=${encodeURIComponent(toApiDate(iso))}&mien=${m}`,
+      );
       if (!res.ok) throw new Error(`Máy chủ trả về lỗi ${res.status}.`);
       const json: unknown = await res.json();
       const { data, source: src, note: n } = normalizeResponse(json);
@@ -82,10 +85,22 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    fetchResults(todayIso());
+    fetchResults(todayIso(), mien);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchResults]);
 
-  const handleView = () => fetchResults(dateIso);
+  const handleView = () => fetchResults(dateIso, mien);
+  const handleMien = (m: Mien) => {
+    setMien(m);
+    fetchResults(dateIso, m);
+  };
+
+  /** Chỉ hiện các hàng giải có số (XSMB không có giải tám). */
+  const prizeRows = result
+    ? PRIZE_ORDER.filter(({ key }) =>
+        result.provinces.some((p) => (p.prizes[key] ?? []).length > 0),
+      )
+    : [];
 
   return (
     <div>
@@ -94,6 +109,22 @@ export default function HomePage() {
 
       <div className="card">
         <div className="row">
+          <div className="field">
+            <label>Miền</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['nam', 'bac'] as Mien[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mien === m ? '' : 'ghost'}
+                  onClick={() => handleMien(m)}
+                  disabled={loading}
+                >
+                  {m === 'nam' ? 'Miền Nam' : 'Miền Bắc'}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="field">
             <label htmlFor="pick-date">Ngày sổ</label>
             <input
@@ -162,7 +193,7 @@ export default function HomePage() {
                 </tr>
               </thead>
               <tbody>
-                {PRIZE_ORDER.map(({ key, label }) => (
+                {prizeRows.map(({ key, label }) => (
                   <tr key={key} className={key === 'db' ? 'prize-db' : undefined}>
                     <td>{result.weekday}</td>
                     <td>{displayDate(result.date)}</td>

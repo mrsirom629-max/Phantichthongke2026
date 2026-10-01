@@ -9,7 +9,7 @@
  * - Trung thực: đếm rõ mỗi ngày là live hay seed để UI hiển thị đúng.
  */
 import { addDays, cmpDate, isValidDate, todayVN } from './stats';
-import type { DayResult } from './types';
+import type { DayResult, Mien } from './types';
 
 const CONCURRENCY = 5;
 const CLIENT_TIMEOUT_MS = 25_000;
@@ -29,15 +29,17 @@ interface CacheEntry {
 
 const memCache = new Map<string, CacheEntry>();
 
-async function loadOne(date: string): Promise<CacheEntry> {
-  const hit = memCache.get(date);
+async function loadOne(date: string, mien: Mien): Promise<CacheEntry> {
+  const key = `${mien}:${date}`;
+  const hit = memCache.get(key);
   if (hit) return hit;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), CLIENT_TIMEOUT_MS);
   try {
-    const res = await fetch(`/api/results?date=${encodeURIComponent(date)}`, {
-      signal: ctrl.signal,
-    });
+    const res = await fetch(
+      `/api/results?date=${encodeURIComponent(date)}&mien=${mien}`,
+      { signal: ctrl.signal },
+    );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = (await res.json()) as {
       source?: string;
@@ -46,7 +48,7 @@ async function loadOne(date: string): Promise<CacheEntry> {
     const source: 'minhngoc' | 'seed' =
       json?.source === 'minhngoc' || json?.source === 'live' ? 'minhngoc' : 'seed';
     const entry: CacheEntry = { source, day: json?.data ?? null };
-    memCache.set(date, entry);
+    memCache.set(key, entry);
     return entry;
   } catch {
     // Lỗi mạng/timeout: không cache để lần sau thử lại
@@ -63,6 +65,7 @@ async function loadOne(date: string): Promise<CacheEntry> {
 export async function loadDaysLive(
   daysN: number,
   onProgress?: (done: number, total: number) => void,
+  mien: Mien = 'nam',
 ): Promise<LiveDayResult> {
   const n = Math.min(Math.max(Math.floor(daysN) || 30, 1), 365);
   const to = todayVN();
@@ -73,7 +76,7 @@ export async function loadDaysLive(
   let done = 0;
   const worker = async (w: number) => {
     for (let i = w; i < dates.length; i += CONCURRENCY) {
-      slots[i] = await loadOne(dates[i]);
+      slots[i] = await loadOne(dates[i], mien);
       done += 1;
       onProgress?.(done, dates.length);
     }
@@ -105,6 +108,7 @@ export async function loadDaysLive(
 export async function loadSpecificDays(
   dates: string[],
   onProgress?: (done: number, total: number) => void,
+  mien: Mien = 'nam',
 ): Promise<LiveDayResult> {
   const uniq = Array.from(new Set(dates.filter(isValidDate))).sort(cmpDate);
 
@@ -112,7 +116,7 @@ export async function loadSpecificDays(
   let done = 0;
   const worker = async (w: number) => {
     for (let i = w; i < uniq.length; i += CONCURRENCY) {
-      slots[i] = await loadOne(uniq[i]);
+      slots[i] = await loadOne(uniq[i], mien);
       done += 1;
       onProgress?.(done, uniq.length);
     }
