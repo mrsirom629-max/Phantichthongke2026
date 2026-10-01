@@ -8,7 +8,7 @@
  * - Cache trong memory của tab browser: tải lại cùng khoảng ngày là tức thì.
  * - Trung thực: đếm rõ mỗi ngày là live hay seed để UI hiển thị đúng.
  */
-import { addDays, cmpDate, todayVN } from './stats';
+import { addDays, cmpDate, isValidDate, todayVN } from './stats';
 import type { DayResult } from './types';
 
 const CONCURRENCY = 5;
@@ -95,6 +95,45 @@ export async function loadDaysLive(
   });
   days.sort((a, b) => cmpDate(a.date, b.date));
   return { days, live, seed, total: n, perDay };
+}
+
+/**
+ * Tải một danh sách ngày CỤ THỂ (DD-MM-YYYY). Dùng cho masterdata:
+ * chỉ fetch những ngày còn thiếu thay vì tải lại toàn bộ.
+ * Ngày nào API trả data=null (chưa quay / không có số liệu) thì bỏ qua.
+ */
+export async function loadSpecificDays(
+  dates: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<LiveDayResult> {
+  const uniq = Array.from(new Set(dates.filter(isValidDate))).sort(cmpDate);
+
+  const slots: (CacheEntry | null)[] = new Array(uniq.length).fill(null);
+  let done = 0;
+  const worker = async (w: number) => {
+    for (let i = w; i < uniq.length; i += CONCURRENCY) {
+      slots[i] = await loadOne(uniq[i]);
+      done += 1;
+      onProgress?.(done, uniq.length);
+    }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, (_, w) => worker(w)));
+
+  const days: DayResult[] = [];
+  const perDay: { date: string; source: 'minhngoc' | 'seed' }[] = [];
+  let live = 0;
+  let seed = 0;
+  uniq.forEach((date, i) => {
+    const s = slots[i];
+    perDay.push({ date, source: s?.source ?? 'seed' });
+    if (s?.day) {
+      days.push(s.day);
+      if (s.source === 'minhngoc') live += 1;
+      else seed += 1;
+    }
+  });
+  days.sort((a, b) => cmpDate(a.date, b.date));
+  return { days, live, seed, total: uniq.length, perDay };
 }
 
 /** Xóa cache client (khi muốn ép tải lại toàn bộ). */

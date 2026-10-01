@@ -83,6 +83,15 @@ export function cmpDate(a: string, b: string): number {
   return d === 0 ? 0 : d > 0 ? -1 : 1; // d>0 nghĩa là b muộn hơn → a đứng trước → -1
 }
 
+/** Kiểm tra chuỗi \"DD-MM-YYYY\" có phải ngày dương lịch hợp lệ (đúng số ngày/tháng). */
+export function isValidDate(s: string): boolean {
+  if (typeof s !== 'string' || !/^\d{2}-\d{2}-\d{4}$/.test(s)) return false;
+  const [d, m, y] = s.split('-').map(Number);
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return false;
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate(); // ngày cuối tháng m
+  return d <= dim;
+}
+
 // ─── Trích draws trong khoảng ────────────────────────────────────────────────
 
 export interface DrawNumbers {

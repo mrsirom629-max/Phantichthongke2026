@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { MLP, buildDataset, mulberry32, splitChrono, topK } from '@/lib/nn';
 import { PRIZE_COUNTS, PRIZE_DIGITS } from '@/lib/constants';
-import { loadDaysLive } from '@/lib/liveDays';
+import { useMasterdataLoad } from '@/lib/useMasterdataLoad';
+import MasterdataPanel from '@/components/MasterdataPanel';
 import type { DayResult, PrizeSet } from '@/lib/types';
 
 const LR = 0.5; // learning rate SGD
@@ -111,7 +112,13 @@ export default function LabPage() {
   const [isDemo, setIsDemo] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
   const [seedCount, setSeedCount] = useState(0);
-  const [loadProg, setLoadProg] = useState({ done: 0, total: 0 });
+  const {
+    loading: masterLoading,
+    progress: masterProg,
+    error: masterError,
+    data: master,
+    load: loadMaster,
+  } = useMasterdataLoad();
   const [phase, setPhase] = useState<Phase>('idle');
   const [prog, setProg] = useState({ epoch: 0, total: 0, loss: 0 });
   const [losses, setLosses] = useState<number[]>([]);
@@ -127,24 +134,22 @@ export default function LabPage() {
     };
   }, []);
 
-  /** Tải 90 ngày gần nhất: mỗi ngày thử live Minh Ngọc trước, fallback seed. */
+  /** Tải 90 ngày gần nhất QUA MASTERDATA: chỉ tải ngày thiếu, ghi bổ sung không trùng. */
   const loadDays = async () => {
     setPhase('loading');
     setErr('');
     setResults(null);
     setIsDemo(false);
-    setLoadProg({ done: 0, total: 90 });
-    try {
-      const r = await loadDaysLive(90, (done, total) => setLoadProg({ done, total }));
-      if (r.days.length === 0) throw new Error('empty');
-      setDays(r.days);
-      setLiveCount(r.live);
-      setSeedCount(r.seed);
-      setPhase('ready');
-    } catch {
-      setErr('Không tải được dữ liệu. Hãy kiểm tra lại rồi thử lại.');
+    const st = await loadMaster(90);
+    if (!st) {
+      setErr(masterError || 'Không tải được dữ liệu. Hãy kiểm tra lại rồi thử lại.');
       setPhase('idle');
+      return;
     }
+    setDays(st.days);
+    setLiveCount(st.live);
+    setSeedCount(st.seed);
+    setPhase('ready');
   };
 
   const useDemo = () => {
@@ -244,9 +249,9 @@ export default function LabPage() {
       <div className="card">
         <h3>1. Dữ liệu</h3>
         <div className="row">
-          <button className="ghost" onClick={loadDays} disabled={phase === 'loading' || phase === 'training'}>
-            {phase === 'loading'
-              ? `Đang tải... ${loadProg.done}/${loadProg.total}`
+          <button className="ghost" onClick={loadDays} disabled={masterLoading || phase === 'training'}>
+            {masterLoading
+              ? `${masterProg.phase || 'Đang tải'}${masterProg.total > 0 ? ` ${masterProg.done}/${masterProg.total}` : ''}...`
               : 'Tải dữ liệu thật'}
           </button>
           {days && !isDemo && (
@@ -265,11 +270,11 @@ export default function LabPage() {
             </span>
           )}
         </div>
-        {phase === 'loading' && (
+        {masterLoading && (
           <div className="progress" style={{ marginTop: 8 }}>
             <div
               style={{
-                width: `${loadProg.total > 0 ? (loadProg.done / loadProg.total) * 100 : 0}%`,
+                width: `${masterProg.total > 0 ? (masterProg.done / masterProg.total) * 100 : 0}%`,
               }}
             />
           </div>
@@ -288,6 +293,10 @@ export default function LabPage() {
         )}
         {err && <p style={{ color: '#f87171' }}>{err}</p>}
       </div>
+
+      {master && !isDemo && (
+        <MasterdataPanel rows={master.rows} summary={master.summary} />
+      )}
 
       <div className="card">
         <h3>2. Cấu hình mô hình</h3>

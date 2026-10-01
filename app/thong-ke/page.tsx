@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { XSMN_SCHEDULE } from '../../lib/constants';
 import { addDays, computeStats, drawsInRange, todayVN } from '../../lib/stats';
-import { loadDaysLive, type LiveDayResult } from '../../lib/liveDays';
+import { useMasterdataLoad } from '../../lib/useMasterdataLoad';
+import MasterdataPanel from '../../components/MasterdataPanel';
 import type { NumberStat, StatsResult } from '../../lib/types';
 
 const DAY_OPTIONS = [7, 14, 30, 60, 90];
@@ -78,36 +79,39 @@ export default function StatsPage() {
   const provinces = useMemo(provinceList, []);
   const [days, setDays] = useState<number>(30);
   const [province, setProvince] = useState<string>('all');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [daysData, setDaysData] = useState<LiveDayResult | null>(null);
-  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const {
+    loading,
+    progress,
+    error,
+    data: master,
+    load,
+  } = useMasterdataLoad();
 
   /**
-   * Tải N ngày gần nhất: mỗi ngày gọi /api/results (đã thử live Minh Ngọc
-   * trước, fallback seed). Gom và tính thống kê ngay trên trình duyệt.
+   * Tải N ngày gần nhất QUA MASTERDATA: đọc kho trước, chỉ tải những ngày
+   * còn thiếu từ Minh Ngọc, ghi bổ sung vào kho (không trùng), rồi tính
+   * thống kê trên dữ liệu đã ghi.
    */
-  const loadData = useCallback(async (d: number) => {
-    setLoading(true);
-    setError(null);
-    setProgress({ done: 0, total: d });
-    try {
-      const r = await loadDaysLive(d, (done, total) => setProgress({ done, total }));
-      if (r.days.length === 0) {
-        throw new Error('Không tải được ngày nào. Hãy kiểm tra mạng rồi thử lại.');
-      }
-      setDaysData(r);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Không tải được dữ liệu, vui lòng thử lại.');
-      setDaysData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadData = useCallback((d: number) => load(d), [load]);
 
   useEffect(() => {
     loadData(30);
   }, [loadData]);
+
+  /** Dữ liệu ngày trong khoảng — lấy từ masterdata (đã sắp xếp tăng dần). */
+  const daysData = useMemo(
+    () =>
+      master
+        ? {
+            days: master.days,
+            live: master.live,
+            seed: master.seed,
+            total: days,
+            perDay: master.rows.map((r) => ({ date: r.date, source: r.source })),
+          }
+        : null,
+    [master, days],
+  );
 
   /** Thống kê tính trực tiếp trên dữ liệu ngày đã tải (live + seed). */
   const stats: StatsResult | null = useMemo(() => {
@@ -210,7 +214,8 @@ export default function StatsPage() {
       {loading && (
         <div className="card">
           <p className="muted">
-            Đang tải dữ liệu trực tiếp từ Minh Ngọc: {progress.done}/{progress.total} ngày...
+            {progress.phase || 'Đang tải'}
+            {progress.total > 0 ? `: ${progress.done}/${progress.total} ngày...` : '...'}
           </p>
           <div className="progress">
             <div
@@ -250,6 +255,10 @@ export default function StatsPage() {
               {source === 'demo' && 'Dữ liệu mẫu (demo)'}
             </span>
           </p>
+
+          {master && (
+            <MasterdataPanel rows={master.rows} summary={master.summary} />
+          )}
 
           <div className="grid2">
             <div className="card">
