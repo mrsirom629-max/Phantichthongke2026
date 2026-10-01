@@ -2,14 +2,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { XSMN_SCHEDULE } from '../../lib/constants';
-import { addDays, computeStats, drawsInRange, todayVN } from '../../lib/stats';
+import { addDays, cmpDate, computeStats, diffDays, drawsInRange, isValidDate, todayVN } from '../../lib/stats';
 import { useMasterdataLoad } from '../../lib/useMasterdataLoad';
 import MasterdataPanel from '../../components/MasterdataPanel';
 import StoragePanel from '../../components/StoragePanel';
 import type { NumberStat, StatsResult } from '../../lib/types';
 
-const DAY_OPTIONS = [7, 14, 30, 60, 90];
 const TOP_N = 10;
+const MAX_RANGE_DAYS = 365;
+
+/** "DD-MM-YYYY" → "YYYY-MM-DD" cho <input type="date">. */
+function toInputValue(dmy: string): string {
+  const [d, m, y] = dmy.split('-');
+  return `${y}-${m}-${d}`;
+}
+/** "YYYY-MM-DD" → "DD-MM-YYYY". */
+function fromInputValue(ymd: string): string {
+  const [y, m, d] = ymd.split('-');
+  return `${d}-${m}-${y}`;
+}
 
 /** Danh sách tỉnh XSMN duy nhất, sắp xếp theo alphabet tiếng Việt. */
 function provinceList(): string[] {
@@ -78,9 +89,11 @@ function StatTable({ title, rows }: { title: string; rows: NumberStat[] }) {
 
 export default function StatsPage() {
   const provinces = useMemo(provinceList, []);
-  const [days, setDays] = useState<number>(30);
+  const [fromDate, setFromDate] = useState(() => addDays(todayVN(), -29));
+  const [toDate, setToDate] = useState(() => todayVN());
   const [province, setProvince] = useState<string>('all');
   const [cycle, setCycle] = useState(0);
+  const [formError, setFormError] = useState<string | null>(null);
   const {
     loading,
     progress,
@@ -96,15 +109,28 @@ export default function StatsPage() {
   const windowEndRef = useRef<string | null>(null);
 
   /**
-   * Quét một vòng N ngày QUA MASTERDATA.
-   * - reset=true (hoặc vòng đầu): quét N ngày gần nhất (kết thúc hôm nay).
-   * - reset=false: quét N ngày cũ hơn tiếp theo, đẩy lùi liên tục.
+   * Quét một vòng từ from → to QUA MASTERDATA.
+   * - reset=true: quét đúng khoảng đã chọn (vòng 1).
+   * - reset=false: quét vòng tiếp theo lùi về quá khứ (không đè vòng cũ).
    * Chỉ tải những ngày còn thiếu, ghi bổ sung không trùng.
    */
   const loadData = useCallback(
-    async (d: number, reset: boolean) => {
-      const endArg = reset ? undefined : (windowEndRef.current ?? undefined);
-      const st = await load(d, endArg);
+    async (from: string, to: string, reset: boolean) => {
+      setFormError(null);
+      if (!isValidDate(from) || !isValidDate(to)) {
+        setFormError('Ngày chưa hợp lệ. Hãy chọn lại từ ngày / đến ngày.');
+        return;
+      }
+      if (cmpDate(from, to) > 0) {
+        setFormError('“Từ ngày” phải trước hoặc bằng “Đến ngày”.');
+        return;
+      }
+      const d = diffDays(from, to) + 1;
+      if (d > MAX_RANGE_DAYS) {
+        setFormError(`Khoảng tối đa ${MAX_RANGE_DAYS} ngày (đang chọn ${d} ngày). Hãy thu hẹp lại.`);
+        return;
+      }
+      const st = await load(d, to);
       if (st) {
         // Vòng sau bắt đầu từ ngày liền trước ngày đầu vòng này
         windowEndRef.current = addDays(st.summary.windowFrom, -1);
@@ -115,7 +141,8 @@ export default function StatsPage() {
   );
 
   useEffect(() => {
-    loadData(30, true);
+    const to = todayVN();
+    loadData(addDays(to, -29), to, true);
   }, [loadData]);
 
   /** Dữ liệu ngày trong khoảng — lấy từ masterdata (đã sắp xếp tăng dần). */
@@ -126,11 +153,11 @@ export default function StatsPage() {
             days: master.days,
             live: master.live,
             seed: master.seed,
-            total: days,
+            total: master.days.length,
             perDay: master.rows.map((r) => ({ date: r.date, source: r.source })),
           }
         : null,
-    [master, days],
+    [master],
   );
 
   /** Thống kê tính trực tiếp trên dữ liệu vòng quét hiện tại (live + seed). */
@@ -179,8 +206,19 @@ export default function StatsPage() {
   const cold = stats ? (stats.cold.length ? stats.cold : deriveList(stats.freq, 'cold')) : [];
   const gan = stats ? (stats.gan.length ? stats.gan : deriveList(stats.freq, 'gan')) : [];
 
-  const handleCalc = () => loadData(days, true);
-  const handleNextCycle = () => loadData(days, false);
+  const handleCalc = () => loadData(fromDate, toDate, true);
+  const handleNextCycle = () => {
+    if (!isValidDate(fromDate) || !isValidDate(toDate) || cmpDate(fromDate, toDate) > 0) {
+      setFormError('Hãy chọn khoảng ngày hợp lệ trước.');
+      return;
+    }
+    const d = diffDays(fromDate, toDate) + 1;
+    const newTo = addDays(fromDate, -1);
+    const newFrom = addDays(newTo, -(d - 1));
+    setFromDate(newFrom);
+    setToDate(newTo);
+    loadData(newFrom, newTo, false);
+  };
 
   const gridRows: string[][] = useMemo(() => {
     const rows: string[][] = [];
@@ -201,19 +239,30 @@ export default function StatsPage() {
   return (
     <div>
       <h1>Thống kê lô tô</h1>
-      <p className="muted">Tần suất các số 00–99 theo từng vòng quét N ngày, theo đài hoặc toàn miền Nam. Mỗi vòng là một chu kỳ mới lùi về quá khứ.</p>
+      <p className="muted">Tần suất các số 00–99 trong khoảng ngày đã chọn, theo đài hoặc toàn miền Nam. Mỗi vòng là một chu kỳ mới lùi về quá khứ.</p>
 
       <div className="card">
         <div className="row">
           <div className="field">
-            <label htmlFor="days">Số ngày</label>
-            <select id="days" value={days} onChange={(e) => setDays(Number(e.target.value))}>
-              {DAY_OPTIONS.map((d) => (
-                <option key={d} value={d}>
-                  {d} ngày
-                </option>
-              ))}
-            </select>
+            <label htmlFor="fromDate">Từ ngày</label>
+            <input
+              type="date"
+              id="fromDate"
+              value={toInputValue(fromDate)}
+              max={toInputValue(toDate)}
+              onChange={(e) => e.target.value && setFromDate(fromInputValue(e.target.value))}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="toDate">Đến ngày</label>
+            <input
+              type="date"
+              id="toDate"
+              value={toInputValue(toDate)}
+              min={toInputValue(fromDate)}
+              max={toInputValue(todayVN())}
+              onChange={(e) => e.target.value && setToDate(fromInputValue(e.target.value))}
+            />
           </div>
           <div className="field">
             <label htmlFor="province">Tỉnh / Đài</label>
@@ -241,10 +290,13 @@ export default function StatsPage() {
             </div>
           )}
         </div>
+        {formError && (
+          <p style={{ color: '#f87171', fontSize: 13, marginBottom: 0 }}>{formError}</p>
+        )}
         {cycle > 0 && master && (
           <p className="muted" style={{ fontSize: 13, marginBottom: 0 }}>
             Vòng quét #{cycle}: {master.summary.rangeFrom} → {master.summary.rangeTo} • Bấm{' '}
-            <b>⏭ Vòng tiếp theo</b> để tải {days} ngày cũ hơn nữa vào masterdata
+            <b>⏭ Vòng tiếp theo</b> để tải tiếp một vòng cũ hơn vào masterdata
             (đẩy lùi liên tục, không ghi đè ngày cũ).
           </p>
         )}
