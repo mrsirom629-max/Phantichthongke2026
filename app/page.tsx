@@ -8,6 +8,7 @@ interface ResultsResponse {
   /** API trả 'minhngoc' (live) hoặc 'seed' (demo). Giữ tương thích với dạng cũ 'live'/'demo'. */
   source?: 'minhngoc' | 'seed' | 'live' | 'demo';
   data?: DayResult | null;
+  note?: string;
   error?: string;
 }
 
@@ -35,13 +36,17 @@ function mienLabel(m: Mien): string {
   return 'Miền Nam';
 }
 
-/** Chuẩn hóa response: API trả { source: 'minhngoc'|'seed', data: DayResult|null }. */
-function normalizeResponse(json: unknown): { data: DayResult | null; source: 'live' | 'demo' } {
+/** Chuẩn hóa response: API trả { source: 'minhngoc'|'seed', data: DayResult|null, note? }. */
+function normalizeResponse(json: unknown): {
+  data: DayResult | null;
+  source: 'live' | 'demo';
+  note?: string;
+} {
   if (json && typeof json === 'object' && 'data' in json) {
     const r = json as ResultsResponse;
     const src: 'live' | 'demo' =
       r.source === 'live' || r.source === 'minhngoc' ? 'live' : 'demo';
-    return { data: r.data ?? null, source: src };
+    return { data: r.data ?? null, source: src, note: r.note };
   }
   return { data: (json as DayResult | null) ?? null, source: 'demo' };
 }
@@ -52,6 +57,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DayResult | null>(null);
   const [source, setSource] = useState<'live' | 'demo'>('demo');
+  const [note, setNote] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
   const fetchResults = useCallback(async (iso: string) => {
@@ -62,9 +68,10 @@ export default function HomePage() {
       const res = await fetch(`/api/results?date=${encodeURIComponent(toApiDate(iso))}`);
       if (!res.ok) throw new Error(`Máy chủ trả về lỗi ${res.status}.`);
       const json: unknown = await res.json();
-      const { data, source: src } = normalizeResponse(json);
+      const { data, source: src, note: n } = normalizeResponse(json);
       setResult(data);
       setSource(src);
+      setNote(n ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Không tải được dữ liệu, vui lòng thử lại.');
       setResult(null);
@@ -137,6 +144,7 @@ export default function HomePage() {
               {source === 'live' ? 'Minh Ngọc trực tiếp' : 'Dữ liệu mẫu (demo)'}
             </span>
           </p>
+          {note && <p className="muted" style={{ fontSize: 13 }}>{note}</p>}
           <div style={{ overflowX: 'auto' }}>
             <table className="grid">
               <thead>
