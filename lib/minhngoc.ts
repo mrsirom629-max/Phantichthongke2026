@@ -319,24 +319,26 @@ function parsePageByClass(html: string, date: string): DayResult | null {
   const $ = cheerio.load(html);
 
   // h1 khớp đúng ngày yêu cầu
-  let h1: ReturnType<typeof $> | null = null;
-  $('h1.pagetitle').each((_, el) => {
-    if (h1) return;
-    const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec($(el).text());
-    if (m && `${m[1]}-${m[2]}-${m[3]}` === date) h1 = $(el);
-  });
-  if (!h1) return null;
+  const h1El = $('h1.pagetitle')
+    .toArray()
+    .find((el) => {
+      const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec($(el).text());
+      return !!m && `${m[1]}-${m[2]}-${m[3]}` === date;
+    });
+  if (!h1El) return null;
+  type Sel = ReturnType<ReturnType<typeof cheerio.load>>;
+  const h1: Sel = $(h1El);
 
   // Các div.box_kqxs sau h1 này, trước h1 của ngày kế tiếp.
   // (TP. HCM xuất hiện cả thứ 2 và thứ 7 nên phải giới hạn theo ngày,
   // không quét toàn trang.)
-  const boxes: ReturnType<typeof $>[] = [];
-  let sib = h1.next();
+  const boxes: Sel[] = [];
+  let sib: Sel = h1.next();
   while (sib.length > 0 && !sib.is('h1.pagetitle')) {
     if (sib.is('div.box_kqxs')) boxes.push(sib);
     sib = sib.next();
   }
-  const roots: ReturnType<typeof $>[] = boxes.length > 0 ? boxes : [$('body')];
+  const roots: Sel[] = boxes.length > 0 ? boxes : [$('body')];
 
   const provinces: ProvinceResult[] = [];
   const seen = new Set<string>();
