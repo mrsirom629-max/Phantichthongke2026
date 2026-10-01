@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadDaysLive } from '@/lib/liveDays';
 import { freqTopK, predictTopK, trainForecastMLP, type TrainProgress } from '@/lib/forecastModel';
+import { graphTopK } from '@/lib/graph';
 import {
   MODEL_LABELS,
   fmtPct,
@@ -126,6 +127,9 @@ export default function ForecastPage() {
         setTrainProg({ epoch: 0, total: epochs, loss: 0 });
         const mlp = await trainForecastMLP(past, lookback, hidden, epochs, 0.5, 42, setTrainProg);
         numbers = predictTopK(mlp, past, lookback, k);
+      } else if (model === 'graph') {
+        // Đồ thị tri thức: PageRank trên đồ thị đồng xuất hiện của 90 ngày quá khứ
+        numbers = graphTopK(past, k);
       } else {
         numbers = freqTopK(past, k);
       }
@@ -310,6 +314,7 @@ export default function ForecastPage() {
             <select id="model" value={model} onChange={(e) => setModel(e.target.value as ForecastModel)}>
               <option value="mlp">{MODEL_LABELS.mlp}</option>
               <option value="freq">{MODEL_LABELS.freq}</option>
+              <option value="graph">{MODEL_LABELS.graph}</option>
             </select>
           </div>
           <div className="field">
@@ -501,7 +506,7 @@ export default function ForecastPage() {
         ) : (
           <div>
             <div className="grid2">
-              {(['mlp', 'freq'] as ForecastModel[]).map((m) => {
+              {(Object.keys(MODEL_LABELS) as ForecastModel[]).map((m) => {
                 const s = evolution.byModel.get(m);
                 if (!s) return null;
                 return (

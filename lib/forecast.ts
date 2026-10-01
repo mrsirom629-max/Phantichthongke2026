@@ -14,7 +14,7 @@
 import type { DayResult } from './types';
 import { lotoOf } from './stats';
 
-export type ForecastModel = 'mlp' | 'freq';
+export type ForecastModel = 'mlp' | 'freq' | 'graph';
 
 export interface ForecastParams {
   lookback: number;
@@ -60,11 +60,13 @@ export interface ForecastEntry {
 export const MODEL_VERSIONS: Record<ForecastModel, string> = {
   mlp: 'mlp-100-h-100-sigmoid-xavier-bce-sgd-v1',
   freq: 'freq-topk-v1',
+  graph: 'graph-pagerank-cooccur-v1',
 };
 
 export const MODEL_LABELS: Record<ForecastModel, string> = {
   mlp: 'MLP (mạng nơ-ron)',
   freq: 'Tần suất (baseline)',
+  graph: 'Đồ thị tri thức (PageRank)',
 };
 
 /** Tập lô tô phân biệt trong một ngày (2 chữ số cuối mọi giải, mọi đài). */

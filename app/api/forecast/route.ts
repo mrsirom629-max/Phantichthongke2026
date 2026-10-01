@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 function isModel(v: unknown): v is ForecastModel {
-  return v === 'mlp' || v === 'freq';
+  return v === 'mlp' || v === 'freq' || v === 'graph';
 }
 
 function isNumStr(v: unknown): v is string {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'targetDate phải dạng DD-MM-YYYY.' }, { status: 400 });
   }
   if (!isModel(model)) {
-    return NextResponse.json({ error: 'model phải là mlp hoặc freq.' }, { status: 400 });
+    return NextResponse.json({ error: 'model phải là mlp, freq hoặc graph.' }, { status: 400 });
   }
   if (!(k >= 1 && k <= 30) || numbers.length !== k || !numbers.every(isNumStr)) {
     return NextResponse.json(

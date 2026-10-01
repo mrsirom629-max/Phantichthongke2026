@@ -1,8 +1,23 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MLP, buildDataset, mulberry32, splitChrono, topK } from '@/lib/nn';
 import { PRIZE_COUNTS, PRIZE_DIGITS } from '@/lib/constants';
+import {
+  buildCooccurrenceGraph,
+  dayLotoSet,
+  evaluateGraph,
+  gapDaysOf,
+  pageRank,
+  topEdges,
+  topKByScore,
+  topNeighbors,
+  type GraphEdge,
+  type GraphEval,
+  type LotoGraph,
+} from '@/lib/graph';
+import KnowledgeGraph from '@/components/KnowledgeGraph';
+import { cmpDate } from '@/lib/stats';
 import { useMasterdataLoad } from '@/lib/useMasterdataLoad';
 import MasterdataPanel from '@/components/MasterdataPanel';
 import type { DayResult, PrizeSet } from '@/lib/types';
@@ -125,6 +140,15 @@ export default function LabPage() {
   const [results, setResults] = useState<EvalResult | null>(null);
   const [counts, setCounts] = useState({ train: 0, test: 0 });
   const [err, setErr] = useState('');
+  // Đồ thị tri thức
+  const [graphView, setGraphView] = useState<{
+    graph: LotoGraph;
+    scores: number[];
+    edges: GraphEdge[];
+  } | null>(null);
+  const [selNode, setSelNode] = useState<number | null>(null);
+  const [graphEval, setGraphEval] = useState<GraphEval | null>(null);
+  const [graphBusy, setGraphBusy] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Dọn interval khi unmount -> không rò rỉ timer
@@ -140,6 +164,9 @@ export default function LabPage() {
     setErr('');
     setResults(null);
     setIsDemo(false);
+    setGraphView(null);
+    setGraphEval(null);
+    setSelNode(null);
     const st = await loadMaster(90);
     if (!st) {
       setErr(masterError || 'Không tải được dữ liệu. Hãy kiểm tra lại rồi thử lại.');
@@ -157,6 +184,9 @@ export default function LabPage() {
     setIsDemo(true);
     setErr('');
     setResults(null);
+    setGraphView(null);
+    setGraphEval(null);
+    setSelNode(null);
     setPhase('ready');
   };
 
@@ -232,8 +262,53 @@ export default function LabPage() {
     setPhase('done');
   };
 
+  /**
+   * Xây dựng đồ thị tri thức từ toàn bộ ngày đã tải (mô tả, không dự báo)
+   * và đánh giá mô hình PageRank đúng kỷ luật thời gian (đồ thị chỉ thấy
+   * ngày train). Chạy nhanh, không cần chunk như MLP.
+   */
+  const buildGraph = () => {
+    if (!days || days.length < MIN_DAYS) return;
+    setGraphBusy(true);
+    // setTimeout để UI kịp hiện trạng thái busy trước khi tính toán nặng
+    setTimeout(() => {
+      try {
+        const sorted = days.slice().sort((a, b) => cmpDate(a.date, b.date));
+        const graph = buildCooccurrenceGraph(sorted);
+        const scores = pageRank(graph);
+        setGraphView({ graph, scores, edges: topEdges(graph, 220) });
+        setSelNode(null);
+        setGraphEval(evaluateGraph(sorted, lookback, k));
+        setErr('');
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : 'Không xây được đồ thị.');
+      } finally {
+        setGraphBusy(false);
+      }
+    }, 30);
+  };
+
+  /** Chi tiết node đang chọn: hạng PageRank, tần suất, gan, số hay về cùng. */
+  const nodeDetail = useMemo(() => {
+    if (selNode === null || !graphView || !days) return null;
+    const { graph, scores } = graphView;
+    const sorted = days.slice().sort((a, b) => cmpDate(a.date, b.date));
+    const rank = topKByScore(scores, 100).indexOf(selNode) + 1;
+    return {
+      label: String(selNode).padStart(2, '0'),
+      rank,
+      score: scores[selNode],
+      freq: graph.freq[selNode],
+      gap: gapDaysOf(sorted, selNode),
+      neighbors: topNeighbors(graph, selNode, 6),
+    };
+  }, [selNode, graphView, days]);
+
   const showHonestNote =
     results !== null && results.mlp.p <= results.freq.p + 1e-9;
+
+  const graphBeatsFreq =
+    graphEval !== null && graphEval.graph.p > graphEval.freq.p + 1e-9;
 
   return (
     <div>
@@ -413,6 +488,143 @@ export default function LabPage() {
           )}
         </div>
       )}
+
+      {phase === 'ready' || phase === 'done' ? (
+        <div className="card">
+          <h3>5. Đồ thị tri thức số lô tô (Knowledge Graph)</h3>
+          <p className="muted" style={{ fontSize: 13 }}>
+            Mỗi số 00–99 là một <b>node</b>; hai số cùng xuất hiện trong một ngày
+            tạo một <b>cạnh</b> (càng nhiều ngày cùng về, cạnh càng đậm). Thuật toán{' '}
+            <b>PageRank viết tay</b> xếp hạng độ "trung tâm" của từng số trong mạng
+            quan hệ này — một cách xếp hạng bằng đồ thị, khác với MLP và tần suất thô.
+            Đánh giá đúng kỷ luật thời gian: đồ thị chỉ được xây trên ngày train,
+            chấm trên cùng tập ngày test với các baseline.
+          </p>
+          <div className="row">
+            <button onClick={buildGraph} disabled={graphBusy || !days || days.length < MIN_DAYS}>
+              {graphBusy ? 'Đang xây đồ thị...' : graphView ? 'Xây lại đồ thị' : 'Xây dựng đồ thị & đánh giá'}
+            </button>
+            {graphView && (
+              <span className="muted">
+                Đồ thị: <b>100</b> node • <b>{graphView.edges.length}</b> cạnh tiêu biểu •{' '}
+                <b>{graphView.graph.days}</b> ngày
+              </span>
+            )}
+          </div>
+
+          {graphView && (
+            <div style={{ marginTop: 12 }}>
+              <div className="grid2">
+                <KnowledgeGraph
+                  scores={graphView.scores}
+                  edges={graphView.edges}
+                  selected={selNode}
+                  onSelect={(n) => setSelNode((cur) => (cur === n ? null : n))}
+                />
+                <div>
+                  {nodeDetail ? (
+                    <div>
+                      <h4 style={{ marginTop: 0 }}>
+                        Phân tích số <span className="num" style={{ fontSize: 20 }}>{nodeDetail.label}</span>
+                      </h4>
+                      <table className="grid">
+                        <tbody>
+                          <tr><td>Hạng PageRank</td><td className="num"><b>{nodeDetail.rank}/100</b></td></tr>
+                          <tr><td>Điểm PageRank</td><td className="num">{nodeDetail.score.toFixed(5)}</td></tr>
+                          <tr><td>Số ngày xuất hiện</td><td className="num">{nodeDetail.freq}</td></tr>
+                          <tr><td>Số ngày vắng mặt (gan)</td><td className="num">{nodeDetail.gap ?? '—'}</td></tr>
+                        </tbody>
+                      </table>
+                      <h4>Hay về cùng với</h4>
+                      {nodeDetail.neighbors.length === 0 ? (
+                        <p className="muted">Số này chưa từng xuất hiện trong dữ liệu.</p>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {nodeDetail.neighbors.map(({ num, weight }) => (
+                            <span
+                              key={num}
+                              className="num"
+                              title={`${weight} ngày về cùng`}
+                              onClick={() => setSelNode(num)}
+                              style={{
+                                border: '1px solid var(--border)',
+                                borderRadius: 8,
+                                padding: '6px 10px',
+                                cursor: 'pointer',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {String(num).padStart(2, '0')}
+                              <span className="muted" style={{ fontWeight: 400 }}> ×{weight}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="muted">Nhấp vào một node trên đồ thị để xem phân tích chi tiết số đó.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {graphEval && (
+            <div style={{ marginTop: 16 }}>
+              <h4>
+                Đánh giá mô hình đồ thị ({graphEval.testDays} kỳ test, train {graphEval.trainDays} ngày)
+              </h4>
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Mô hình</th>
+                    <th>Precision@{k}</th>
+                    <th>Recall@{k}</th>
+                    <th>Số kỳ test</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><b>Đồ thị tri thức (PageRank)</b></td>
+                    <td className="num">{pct(graphEval.graph.p)}</td>
+                    <td className="num">{pct(graphEval.graph.r)}</td>
+                    <td className="num">{graphEval.graph.n}</td>
+                  </tr>
+                  <tr>
+                    <td>Baseline tần suất (k số hay về nhất ở train)</td>
+                    <td className="num">{pct(graphEval.freq.p)}</td>
+                    <td className="num">{pct(graphEval.freq.r)}</td>
+                    <td className="num">{graphEval.freq.n}</td>
+                  </tr>
+                  <tr>
+                    <td>Baseline ngẫu nhiên (kỳ vọng lý thuyết)</td>
+                    <td className="num">{pct(graphEval.randPrecision)}</td>
+                    <td className="num">—</td>
+                    <td className="num">{graphEval.graph.n}</td>
+                  </tr>
+                </tbody>
+              </table>
+              {graphBeatsFreq ? (
+                <div className="note">
+                  PageRank lần này vượt baseline tần suất trên tập test — hãy thận trọng:
+                  với dữ liệu ngẫu nhiên độc lập, chênh lệch nhỏ thường chỉ là dao động
+                  ngẫu nhiên của mẫu test nhỏ. Đồ thị vẫn <b>không dự đoán được</b> các
+                  kỳ quay tương lai.
+                </div>
+              ) : (
+                <div className="note">
+                  <b>Kết luận:</b> mô hình đồ thị không vượt được baseline tần suất —{' '}
+                  <b>đúng như kỳ vọng lý thuyết</b>. Quan hệ "hay về cùng nhau" trong quá
+                  khứ không chứa tín hiệu dự báo tương lai vì các kỳ quay độc lập ngẫu
+                  nhiên. Giá trị của mô hình này là <b>khám phá &amp; trực quan hóa</b>{' '}
+                  cấu trúc đồng xuất hiện (node trung tâm, cụm số hay đi cùng nhau),
+                  không phải để dự đoán.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
