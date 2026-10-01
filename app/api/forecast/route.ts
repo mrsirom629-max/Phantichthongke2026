@@ -115,6 +115,39 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * DELETE /api/forecast — xóa một entry khỏi nhật ký: { id }.
+ * (Chỉ dùng khi ghi nhầm; entry đã reconciled nên giữ lại để bảo toàn lịch sử đo.)
+ */
+export async function DELETE(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Body JSON không hợp lệ.' }, { status: 400 });
+  }
+  const { id } = body as { id?: unknown };
+  if (typeof id !== 'string') {
+    return NextResponse.json({ error: 'Cần { id }.' }, { status: 400 });
+  }
+  const log = await readLog();
+  const idx = log.findIndex((e) => e.id === id);
+  if (idx < 0) return NextResponse.json({ error: 'Không tìm thấy entry.' }, { status: 404 });
+  log.splice(idx, 1);
+  try {
+    await writeLog(log);
+  } catch (e) {
+    const code = (e as Error & { code?: string }).code;
+    if (code === STORE_READONLY || (e as Error).message === STORE_READONLY) {
+      return NextResponse.json(
+        { error: 'Không ghi được nhật ký chung (thiếu GITHUB_TOKEN).', code: STORE_READONLY },
+        { status: 501 },
+      );
+    }
+    return NextResponse.json({ error: 'Không ghi được nhật ký.' }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, id });
+}
+/**
  * PATCH /api/forecast — đối chiếu thủ công một entry: { id, action: 'reconcile' }.
  * Chỉ đối chiếu khi đã có số liệu LIVE của ngày mục tiêu.
  */

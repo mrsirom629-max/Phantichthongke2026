@@ -181,7 +181,28 @@ export default function ForecastPage() {
     }
   };
 
-  /** Đối chiếu các entry pending đã có số thật (server trước, local sau). */
+  /** Xóa một entry khỏi nhật ký (chỉ khi còn pending). */
+  const deleteEntry = async (id: string) => {
+    if (!confirm('Xóa mô phỏng này khỏi nhật ký?')) return;
+    try {
+      const res = await fetch('/api/forecast', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        const j = (await res.json()) as { error?: string };
+        throw new Error(j.error || 'Không xóa được.');
+      }
+      // Xóa cả bản local nếu có
+      const locals = loadLocal().filter((e) => e.id !== id);
+      saveLocal(locals);
+      setLocalEntries(locals);
+      await refreshLog();
+    } catch (e) {
+      setRecMsg(e instanceof Error ? e.message : 'Không xóa được.');
+    }
+  };
   const reconcileAll = useCallback(async () => {
     setRecMsg('Đang đối chiếu...');
     let changed = 0;
@@ -442,6 +463,16 @@ export default function ForecastPage() {
                         <span className="pill warn">chờ đối chiếu</span>
                       ) : (
                         <span className="pill good">đã đối chiếu</span>
+                      )}
+                      {e.status === 'pending' && (
+                        <button
+                          type="button"
+                          className="ghost"
+                          style={{ marginLeft: 8, padding: '2px 8px', fontSize: 12 }}
+                          onClick={() => deleteEntry(e.id)}
+                        >
+                          Xóa
+                        </button>
                       )}
                     </td>
                     <td className="num" style={{ fontSize: 13 }}>
