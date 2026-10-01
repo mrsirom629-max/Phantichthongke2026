@@ -23,6 +23,15 @@ import {
 } from '@/lib/power655';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
 import { addDays, cmpDate, diffDays, isValidDate, todayVN } from '@/lib/stats';
+import {
+  DEFAULT_CONSTRAINTS,
+  scoreNumbers55,
+  scoreSpread,
+  solvePortfolio,
+  trainNN55,
+  type Portfolio,
+} from '@/lib/nnSolver655';
+import type { TrainProgress } from '@/lib/forecastModel';
 
 const VIEW_KEY = 'p65-view-v1';
 const MAX_RANGE_DAYS = 365;
@@ -100,6 +109,18 @@ export default function Power655Page() {
   const [selNum, setSelNum] = useState<number | null>(null); // số 1..55 đang chọn
   const [selGraph, setSelGraph] = useState<number | null>(null); // index 0-based
   const busyRef = useRef(false);
+
+  // NN + Solver
+  const [nnLookback, setNnLookback] = useState(5);
+  const [nnHidden, setNnHidden] = useState(32);
+  const [nnEpochs, setNnEpochs] = useState(200);
+  const [ticketCount, setTicketCount] = useState(5);
+  const [lambda, setLambda] = useState(0.5);
+  const [nnPhase, setNnPhase] = useState<'idle' | 'training' | 'solving' | 'done'>('idle');
+  const [trainProg, setTrainProg] = useState<TrainProgress>({ epoch: 0, total: 0, loss: 0 });
+  const [nnScores, setNnScores] = useState<number[] | null>(null);
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [nnErr, setNnErr] = useState('');
 
   /**
    * Tải các kỳ trong khoảng from → to: mỗi trang ngày của Minh Ngọc chứa
@@ -198,6 +219,38 @@ export default function Power655Page() {
     setToDate(newTo);
     loadRange(newFrom, newTo);
   }, [fromDate, toDate, loadRange]);
+
+  /**
+   * Đấu nối NN + Solver:
+   *  1. Huấn luyện MLP 55→hidden→55 trên lịch sử các kỳ → điểm số mô tả 55 số.
+   *  2. Solver (greedy + local search) chọn K vé tối ưu tổng điểm + độ bao phủ,
+   *     dưới ràng buộc tổ hợp.
+   */
+  const runNNSolver = useCallback(async () => {
+    if (draws.length < 20) {
+      setNnErr(`Cần ít nhất 20 kỳ dữ liệu (hiện có ${draws.length}). Hãy mở rộng khoảng ngày.`);
+      return;
+    }
+    setNnErr('');
+    setPortfolio(null);
+    setNnScores(null);
+    setNnPhase('training');
+    setTrainProg({ epoch: 0, total: nnEpochs, loss: 0 });
+    try {
+      const mlp = await trainNN55(draws, nnLookback, nnHidden, nnEpochs, setTrainProg);
+      const scores = scoreNumbers55(mlp, draws, nnLookback);
+      setNnScores(scores);
+      setNnPhase('solving');
+      // setTimeout để UI kịp vẽ trạng thái "đang giải" trước khi solver chạy
+      await new Promise<void>((r) => setTimeout(r, 30));
+      const pf = solvePortfolio(scores, ticketCount, lambda, DEFAULT_CONSTRAINTS);
+      setPortfolio(pf);
+      setNnPhase('done');
+    } catch (e) {
+      setNnErr(e instanceof Error ? e.message : 'Chạy thất bại, thử lại.');
+      setNnPhase('idle');
+    }
+  }, [draws, nnLookback, nnHidden, nnEpochs, ticketCount, lambda]);
 
   // Mở trang: khôi phục khoảng đã lưu rồi tải
   useEffect(() => {
@@ -627,6 +680,152 @@ export default function Power655Page() {
           </table>
         </div>
       )}
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>6. Tối ưu tổ hợp — Mạng nơ-ron + Solver</h3>
+        <p className="muted" style={{ fontSize: 13 }}>
+          <b>Đấu nối 2 tầng:</b> (1) MLP 55→nơ-ron ẩn→55 học từ lịch sử các kỳ, cho{' '}
+          <b>điểm số mô tả</b> từng số 01–55; (2) <b>solver</b> (greedy + local search)
+          chọn K vé × 6 số sao cho <b>tổng điểm lớn nhất + độ bao phủ cao nhất</b>,
+          dưới ràng buộc: số lẻ {DEFAULT_CONSTRAINTS.oddMin}–{DEFAULT_CONSTRAINTS.oddMax},
+          tổng {DEFAULT_CONSTRAINTS.sumMin}–{DEFAULT_CONSTRAINTS.sumMax},
+          tối đa {DEFAULT_CONSTRAINTS.consecMax} cặp liên tiếp/vé.
+        </p>
+        <div className="note">
+          <b>Đọc đúng vai trò:</b> NN chỉ học <i>mô tả</i> quá khứ — với quay ngẫu nhiên,
+          điểm số kỳ vọng ≈ đều nhau + nhiễu (xem độ lệch chuẩn dưới đây). Solver{' '}
+          <b>không làm tăng xác suất trúng</b>; nó giúp giữ kỷ luật tổ hợp, đa dạng hóa
+          danh mục vé và tránh dồn vào các số "đông người chọn" (đỡ chia giải <i>nếu</i> trúng).
+        </div>
+        <div className="row">
+          <div className="field">
+            <label>Lookback</label>
+            <select value={nnLookback} onChange={(e) => setNnLookback(Number(e.target.value))} disabled={nnPhase === 'training'}>
+              <option value={3}>3</option>
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Nơ-ron ẩn</label>
+            <select value={nnHidden} onChange={(e) => setNnHidden(Number(e.target.value))} disabled={nnPhase === 'training'}>
+              <option value={16}>16</option>
+              <option value={32}>32</option>
+              <option value={64}>64</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Epoch</label>
+            <select value={nnEpochs} onChange={(e) => setNnEpochs(Number(e.target.value))} disabled={nnPhase === 'training'}>
+              <option value={50}>50</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>Số vé (K)</label>
+            <select value={ticketCount} onChange={(e) => setTicketCount(Number(e.target.value))} disabled={nnPhase === 'training' || nnPhase === 'solving'}>
+              {[1, 2, 3, 5, 8, 10].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Ưu tiên bao phủ (λ)</label>
+            <select value={lambda} onChange={(e) => setLambda(Number(e.target.value))} disabled={nnPhase === 'training' || nnPhase === 'solving'}>
+              <option value={0}>0 — chỉ theo điểm NN</option>
+              <option value={0.5}>0.5 — cân bằng</option>
+              <option value={1}>1 — bao phủ mạnh</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>&nbsp;</label>
+            <button onClick={runNNSolver} disabled={nnPhase === 'training' || nnPhase === 'solving' || loading}>
+              {nnPhase === 'training'
+                ? `NN đang học ${trainProg.epoch}/${trainProg.total}...`
+                : nnPhase === 'solving'
+                  ? 'Solver đang tối ưu...'
+                  : 'Chạy NN + Solver'}
+            </button>
+          </div>
+        </div>
+        {nnPhase === 'training' && (
+          <div style={{ marginTop: 8 }}>
+            <p className="muted">Epoch {trainProg.epoch}/{trainProg.total} — loss: {trainProg.loss.toFixed(4)}</p>
+            <div className="progress">
+              <div style={{ width: `${trainProg.total > 0 ? (trainProg.epoch / trainProg.total) * 100 : 0}%` }} />
+            </div>
+          </div>
+        )}
+        {nnErr && <p style={{ color: '#f87171' }}>{nnErr}</p>}
+
+        {nnScores && (
+          <div style={{ marginTop: 12 }}>
+            <h4>Điểm số NN cho 55 số (top 10)</h4>
+            {(() => {
+              const sp = scoreSpread(nnScores);
+              const top = nnScores
+                .map((s, i) => ({ s, n: i + 1 }))
+                .sort((a, b) => b.s - a.s)
+                .slice(0, 10);
+              return (
+                <div>
+                  <p className="muted" style={{ fontSize: 13 }}>
+                    Trung bình {sp.mean.toFixed(3)} • độ lệch chuẩn {sp.std.toFixed(4)} •
+                    min {sp.min.toFixed(3)} • max {sp.max.toFixed(3)}
+                    {sp.std < 0.02 && (
+                      <span> — <b>độ phân tán rất nhỏ: NN gần như không tìm thấy tín hiệu nào</b> (đúng kỳ vọng ngẫu nhiên).</span>
+                    )}
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {top.map(({ s, n }) => (
+                      <span key={n} className="num" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px' }} title={`Điểm ${s.toFixed(4)}`}>
+                        <b>{String(n).padStart(2, '0')}</b> <span className="muted">{s.toFixed(3)}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {portfolio && (
+          <div style={{ marginTop: 16 }}>
+            <h4>Danh mục {portfolio.tickets.length} vé — solver đã tối ưu</h4>
+            <p className="muted" style={{ fontSize: 13 }}>
+              Tổng điểm {portfolio.totalScore.toFixed(2)} • Bao phủ{' '}
+              <b>{portfolio.coverage}/55</b> số phân biệt • λ={portfolio.lambda}
+            </p>
+            <div style={{ overflowX: 'auto' }}>
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Vé</th>
+                    <th>6 số</th>
+                    <th>Điểm</th>
+                    <th>Lẻ</th>
+                    <th>Tổng</th>
+                    <th>Liên tiếp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portfolio.tickets.map((t, i) => (
+                    <tr key={i}>
+                      <td className="num">#{i + 1}</td>
+                      <td>{t.numbers.map((n) => <Ball key={n} n={n} size={26} />)}</td>
+                      <td className="num">{t.score.toFixed(2)}</td>
+                      <td className="num">{t.odd}/6</td>
+                      <td className="num">{t.sum}</td>
+                      <td className="num">{t.consec}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
