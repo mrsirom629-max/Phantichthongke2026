@@ -573,12 +573,13 @@ function parsePageByClass(html: string, date: string): DayResult | null {
       let ok = true;
       for (const [cls, key] of PRIZE_CLASS_MAP) {
         const nums: string[] = [];
-        $(t)
-          .find(`td.${cls} div.giaiSo`)
-          .each((_, d) => {
-            const v = $(d).text().replace(/\s+/g, '').trim();
-            if (/^\d+$/.test(v)) nums.push(v);
-          });
+        // Trang mới (kể cả trang ngày hiện tại) dùng <div> trơn, trang cũ dùng div.giaiSo
+        let divs = $(t).find(`td.${cls} div.giaiSo`);
+        if (divs.length === 0) divs = $(t).find(`td.${cls} > div`);
+        divs.each((_, d) => {
+          const v = $(d).text().replace(/\s+/g, '').trim();
+          if (/^\d+$/.test(v)) nums.push(v);
+        });
         const exp = EXPECTED[key];
         if (nums.length !== exp.count || !nums.every((s) => s.length === exp.digits)) {
           ok = false;
