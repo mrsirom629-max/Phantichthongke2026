@@ -33,14 +33,20 @@ import {
 } from '@/lib/nnSolver655';
 import {
   BASELINE_MEAN_HITS,
+  PLAYBOOK_BASELINE,
   aggregateByConfig,
   configSignature,
+  entrySource,
   evolutionAdvice,
   loadEvoEntries,
+  playbookScores,
   reconcileEntry,
   saveEvoEntries,
+  sourceComparison,
+  userNumberStats,
   type EvoEntry,
   type SolverConfig,
+  type UserNumStat,
 } from '@/lib/evolution655';
 import type { TrainProgress } from '@/lib/forecastModel';
 
@@ -104,9 +110,31 @@ function displayDate(d: string): string {
   return d.replace(/-/g, '/');
 }
 
+/**
+ * Phân tích ô nhập bộ số của anh: mỗi dòng 1 vé, 6 số 01–55 cách nhau
+ * bởi khoảng trắng/phẩy/chấm phẩy.
+ */
+function parseUserTickets(text: string): { tickets: number[][]; error: string | null } {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) return { tickets: [], error: 'Anh chưa nhập bộ số nào.' };
+  if (lines.length > 10) return { tickets: [], error: 'Tối đa 10 vé (10 dòng).' };
+  const tickets: number[][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const nums = lines[i].split(/[\s,;]+/).filter(Boolean).map(Number);
+    if (
+      nums.length !== 6 ||
+      nums.some((n) => !Number.isInteger(n) || n < 1 || n > 55) ||
+      new Set(nums).size !== 6
+    ) {
+      return { tickets: [], error: `Dòng ${i + 1}: cần đúng 6 số nguyên phân biệt từ 01–55.` };
+    }
+    tickets.push(nums.slice().sort((a, b) => a - b));
+  }
+  return { tickets, error: null };
+}
+
 /** Biểu đồ hits TB theo thời gian + đường kỳ vọng ngẫu nhiên. */
-function EvoChart({ entries }: { entries: EvoEntry[] }) {
-  const dkey = (s: string) => s.split('-').reverse().join('');
+function EvoChart({ entries }: { entries: EvoEntry[] }) {  const dkey = (s: string) => s.split('-').reverse().join('');
   const done = entries
     .filter((e) => e.status === 'done' && e.meanHits !== null)
     .sort((a, b) => (dkey(a.targetDate || a.afterDate) < dkey(b.targetDate || b.afterDate) ? -1 : 1));
@@ -135,8 +163,8 @@ function EvoChart({ entries }: { entries: EvoEntry[] }) {
       <polyline points={pts} fill="none" stroke="#38bdf8" strokeWidth={2} />
       {done.map((e, i) => (
         <g key={e.id}>
-          <circle cx={X(i)} cy={Y(e.meanHits!)} r={4.5} fill="#38bdf8">
-            <title>{`${e.targetDate || 'kỳ sau ' + e.afterDate}: TB ${e.meanHits!.toFixed(2)}/vé (hits ${e.hits!.join('·')})`}</title>
+          <circle cx={X(i)} cy={Y(e.meanHits!)} r={4.5} fill={entrySource(e) === 'user' ? '#4ade80' : '#38bdf8'}>
+            <title>{`${entrySource(e) === 'user' ? 'Anh' : 'Máy'} · ${e.targetDate || 'kỳ sau ' + e.afterDate}: TB ${e.meanHits!.toFixed(2)}/vé (hits ${e.hits!.join('·')})`}</title>
           </circle>
           {i % step === 0 && (
             <text x={X(i)} y={H - 10} textAnchor="middle" fontSize={11} fill="var(--muted)">
@@ -183,6 +211,14 @@ export default function Power655Page() {
   const [evoMsg, setEvoMsg] = useState('');
   const [backtestDate, setBacktestDate] = useState('');
   const [evoBusy, setEvoBusy] = useState(false);
+  const [evoFilter, setEvoFilter] = useState<'all' | 'user' | 'system'>('all');
+
+  // Sổ tay của anh
+  const [userPicks, setUserPicks] = useState('');
+  const [userTestDate, setUserTestDate] = useState('');
+  const [userMsg, setUserMsg] = useState('');
+  const [playbookK, setPlaybookK] = useState(5);
+  const [playbookTickets, setPlaybookTickets] = useState<Portfolio | null>(null);
 
   /**
    * Tải các kỳ trong khoảng from → to: mỗi trang ngày của Minh Ngọc chứa
@@ -359,6 +395,7 @@ export default function Power655Page() {
       const meanHits = hits.reduce((a, b) => a + b, 0) / hits.length;
       const entry: EvoEntry = {
         id: `${Date.now()}`,
+        source: 'system',
         targetDate: backtestDate,
         afterDate: '',
         ky: actual.ky,
@@ -391,6 +428,7 @@ export default function Power655Page() {
     }
     const entry: EvoEntry = {
       id: `${Date.now()}`,
+      source: 'system',
       targetDate: '',
       afterDate: todayVN(),
       ky: '',
@@ -424,6 +462,98 @@ export default function Power655Page() {
   const deleteEvo = useCallback((id: string) => {
     persistEvo(evoEntries.filter((e) => e.id !== id));
   }, [evoEntries]);
+
+  /* ── Sổ tay của anh: anh chọn số ────────────────────────── */
+
+  const userManualConfig = (n: number): SolverConfig => ({
+    lookback: 0, hidden: 0, epochs: 0, tickets: n, lambda: 0,
+  });
+
+  /** Lưu bộ số anh nhập để chờ KQ kỳ tới. */
+  const saveUserPending = useCallback(() => {
+    const { tickets, error } = parseUserTickets(userPicks);
+    if (error) {
+      setUserMsg(error);
+      return;
+    }
+    const distinct = new Set<number>();
+    tickets.forEach((t) => t.forEach((n) => distinct.add(n)));
+    const entry: EvoEntry = {
+      id: `${Date.now()}`,
+      source: 'user',
+      targetDate: '',
+      afterDate: todayVN(),
+      ky: '',
+      config: userManualConfig(tickets.length),
+      tickets,
+      totalScore: 0,
+      coverage: distinct.size,
+      createdAt: Date.now(),
+      status: 'pending',
+      actual: null,
+      hits: null,
+      meanHits: null,
+    };
+    persistEvo([entry, ...evoEntries]);
+    setUserPicks('');
+    setUserMsg(`Đã ghi nhận ${tickets.length} vé của anh — chờ KQ kỳ tới, rồi bấm "Đối chiếu" ở mục 7.`);
+  }, [userPicks, evoEntries]);
+
+  /** Thử bộ số của anh trên 1 ngày quá khứ → đối chiếu ngay. */
+  const testUserOnDate = useCallback(() => {
+    const { tickets, error } = parseUserTickets(userPicks);
+    if (error) {
+      setUserMsg(error);
+      return;
+    }
+    if (!isValidDate(userTestDate)) {
+      setUserMsg('Chọn ngày để thử (ngày có kỳ quay trong quá khứ).');
+      return;
+    }
+    const actual = draws.find((d) => d.date === userTestDate);
+    if (!actual) {
+      setUserMsg(`Ngày ${userTestDate} không có kỳ quay trong dữ liệu đã tải.`);
+      return;
+    }
+    const hits = tickets.map((t) => t.filter((n) => actual.numbers.includes(n)).length);
+    const meanHits = hits.reduce((a, b) => a + b, 0) / hits.length;
+    const distinct = new Set<number>();
+    tickets.forEach((t) => t.forEach((n) => distinct.add(n)));
+    const entry: EvoEntry = {
+      id: `${Date.now()}`,
+      source: 'user',
+      targetDate: userTestDate,
+      afterDate: '',
+      ky: actual.ky,
+      config: userManualConfig(tickets.length),
+      tickets,
+      totalScore: 0,
+      coverage: distinct.size,
+      createdAt: Date.now(),
+      status: 'done',
+      actual: actual.numbers.slice(),
+      hits,
+      meanHits,
+    };
+    persistEvo([entry, ...evoEntries]);
+    setUserMsg(
+      `Thử trên ${userTestDate} (kỳ ${actual.ky}, KQ: ${actual.numbers.map((n) => String(n).padStart(2, '0')).join(' ')}): ` +
+        `trúng TB ${meanHits.toFixed(2)}/vé — kỳ vọng ngẫu nhiên ${BASELINE_MEAN_HITS.toFixed(2)}.`,
+    );
+  }, [userPicks, userTestDate, draws, evoEntries]);
+
+  /** Dựng vé từ sổ tay: solver tối ưu trên điểm số "hợp tay" của anh. */
+  const buildFromPlaybook = useCallback(() => {
+    const stats = userNumberStats(evoEntries);
+    if (stats.length === 0) {
+      setUserMsg('Sổ tay chưa có dữ liệu đối chiếu — hãy thử/lưu vài bộ số trước.');
+      return;
+    }
+    const scores = playbookScores(stats);
+    const pf = solvePortfolio(scores, playbookK, lambda, DEFAULT_CONSTRAINTS);
+    setPlaybookTickets(pf);
+    setUserMsg(`Đã dựng ${pf.tickets.length} vé từ sổ tay của anh (ưu tiên các số "hợp tay", vẫn giữ ràng buộc tổ hợp).`);
+  }, [evoEntries, playbookK, lambda]);
 
   // Tự chọn ngày backtest mặc định: ngày có ≥20 kỳ đứng trước nó
   useEffect(() => {
@@ -1054,14 +1184,31 @@ export default function Power655Page() {
 
         <h4>Biểu đồ tiến hóa — hits TB/vé theo thời gian</h4>
         <EvoChart entries={evoEntries} />
+        <p className="muted" style={{ fontSize: 13 }}>
+          <span style={{ color: '#38bdf8' }}>●</span> máy gợi ý &nbsp;
+          <span style={{ color: '#4ade80' }}>●</span> anh chọn
+        </p>
 
         {evoEntries.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <h4>Nhật ký gợi ý ({evoEntries.length})</h4>
+            <div className="row" style={{ marginBottom: 8 }}>
+              {(['all', 'user', 'system'] as const).map((f) => (
+                <button
+                  key={f}
+                  className={evoFilter === f ? '' : 'ghost'}
+                  style={{ padding: '4px 12px' }}
+                  onClick={() => setEvoFilter(f)}
+                >
+                  {f === 'all' ? 'Tất cả' : f === 'user' ? '🧑 Của anh' : '🤖 Của máy'}
+                </button>
+              ))}
+            </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="grid">
                 <thead>
                   <tr>
+                    <th>Nguồn</th>
                     <th>Ngày/Kỳ</th>
                     <th>Cấu hình</th>
                     <th>Hits từng vé</th>
@@ -1072,10 +1219,16 @@ export default function Power655Page() {
                   </tr>
                 </thead>
                 <tbody>
-                  {evoEntries.map((e) => {
+                  {evoEntries
+                    .filter((e) => evoFilter === 'all' || entrySource(e) === evoFilter)
+                    .map((e) => {
                     const diff = e.meanHits !== null ? e.meanHits - BASELINE_MEAN_HITS : null;
+                    const src = entrySource(e);
                     return (
                       <tr key={e.id}>
+                        <td className="num" title={src === 'user' ? 'Anh tự chọn số' : 'Máy gợi ý (NN+Solver)'}>
+                          {src === 'user' ? '🧑' : '🤖'}
+                        </td>
                         <td className="num">
                           {e.status === 'done' ? (
                             <span title={e.actual ? `KQ: ${e.actual.map((n) => String(n).padStart(2, '0')).join(' ')}` : ''}>
@@ -1107,11 +1260,11 @@ export default function Power655Page() {
         )}
 
         {(() => {
-          const aggs = aggregateByConfig(evoEntries);
+          const aggs = aggregateByConfig(evoEntries.filter((e) => entrySource(e) === 'system'));
           if (aggs.length === 0) return null;
           return (
             <div style={{ marginTop: 12 }}>
-              <h4>Bảng xếp hạng cấu hình (theo objective)</h4>
+              <h4>Bảng xếp hạng cấu hình máy (theo objective)</h4>
               <div style={{ overflowX: 'auto' }}>
                 <table className="grid" style={{ maxWidth: 720 }}>
                   <thead>
@@ -1145,7 +1298,7 @@ export default function Power655Page() {
         })()}
 
         {(() => {
-          const tips = evolutionAdvice(evoEntries);
+          const tips = evolutionAdvice(evoEntries.filter((e) => entrySource(e) === 'system'));
           return (
             <div style={{ marginTop: 12 }}>
               <h4>Hệ thống tự đề xuất cải tiến</h4>
@@ -1157,6 +1310,189 @@ export default function Power655Page() {
             </div>
           );
         })()}
+      </div>
+
+      <div className="card">
+        <h3 style={{ marginTop: 0 }}>8. Sổ tay của anh — anh chọn số, hệ thống ghi nhận &amp; so sánh</h3>
+        <p className="muted" style={{ fontSize: 13 }}>
+          Anh là người chọn cặp số. Hệ thống chỉ làm 3 việc: <b>ghi nhận</b> bộ số của anh,{' '}
+          <b>so sánh</b> với KQ thật, và <b>tối ưu sổ tay</b> cho các kỳ tiếp theo.
+        </p>
+        <div className="field" style={{ maxWidth: 560 }}>
+          <label htmlFor="userpicks">Bộ số của anh — mỗi dòng 1 vé: 6 số từ 01–55, cách nhau bởi khoảng trắng hoặc phẩy</label>
+          <textarea
+            id="userpicks"
+            rows={4}
+            value={userPicks}
+            onChange={(e) => setUserPicks(e.target.value)}
+            placeholder={'07 20 25 29 30 45\n03 11 18 27 33 52'}
+            style={{ width: '100%', fontFamily: 'monospace', fontSize: 15 }}
+          />
+        </div>
+        <div className="row">
+          <div className="field">
+            <label htmlFor="usertestdate">Thử trên ngày (quá khứ)</label>
+            <input
+              type="date"
+              id="usertestdate"
+              value={userTestDate ? toInputValue(userTestDate) : ''}
+              max={toInputValue(todayVN())}
+              onChange={(e) => e.target.value && setUserTestDate(fromInputValue(e.target.value))}
+            />
+          </div>
+          <div className="field">
+            <label>&nbsp;</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={testUserOnDate}>Thử bộ số trên ngày này</button>
+              <button className="ghost" onClick={saveUserPending}>Lưu bộ số (chờ kỳ tới)</button>
+            </div>
+          </div>
+        </div>
+        {userMsg && <p>{userMsg}</p>}
+
+        {(() => {
+          const cmp = sourceComparison(evoEntries);
+          const u = cmp.user;
+          const s = cmp.system;
+          if (u.n === 0 && s.n === 0) return null;
+          const diff = u.meanHits !== null && s.meanHits !== null ? u.meanHits - s.meanHits : null;
+          return (
+            <div style={{ marginTop: 12 }}>
+              <h4>Anh vs máy — trúng TB/vé (đã đối chiếu)</h4>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div className="card" style={{ flex: '1 1 200px', margin: 0 }}>
+                  <div style={{ fontSize: 15 }}>🧑 Anh tự chọn</div>
+                  <div style={{ fontSize: 26, fontWeight: 700 }}>
+                    {u.meanHits !== null ? u.meanHits.toFixed(2) : '—'}
+                  </div>
+                  <div className="muted" style={{ fontSize: 13 }}>{u.n} bản ghi · {u.tickets} vé</div>
+                </div>
+                <div className="card" style={{ flex: '1 1 200px', margin: 0 }}>
+                  <div style={{ fontSize: 15 }}>🤖 Máy (NN+Solver)</div>
+                  <div style={{ fontSize: 26, fontWeight: 700 }}>
+                    {s.meanHits !== null ? s.meanHits.toFixed(2) : '—'}
+                  </div>
+                  <div className="muted" style={{ fontSize: 13 }}>{s.n} bản ghi · {s.tickets} vé</div>
+                </div>
+              </div>
+              {diff !== null && (
+                <p style={{ fontSize: 14 }}>
+                  {Math.abs(diff) < 0.05
+                    ? 'Ngang tài ngang sức — cả hai đều quanh kỳ vọng ngẫu nhiên.'
+                    : diff > 0
+                      ? `Anh đang hơn máy ${diff.toFixed(2)}/vé.`
+                      : `Máy đang hơn anh ${(-diff).toFixed(2)}/vé.`}{' '}
+                  <span className="muted">(Kỳ vọng ngẫu nhiên: {BASELINE_MEAN_HITS.toFixed(2)}/vé)</span>
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        {(() => {
+          const stats = userNumberStats(evoEntries);
+          if (stats.length === 0) {
+            return (
+              <p className="muted" style={{ fontSize: 13 }}>
+                Sổ tay phong độ sẽ hiện ở đây sau vài lần anh thử/lưu và đối chiếu — hệ thống ghi lại
+                số nào anh hay chọn và "phong độ" của từng số.
+              </p>
+            );
+          }
+          return (
+            <div style={{ marginTop: 12 }}>
+              <h4>Sổ tay phong độ — các số anh hay chọn</h4>
+              <p className="muted" style={{ fontSize: 13 }}>
+                "Hợp tay" = tỉ lệ trúng khi anh chọn số đó cao hơn kỳ vọng ngẫu nhiên{' '}
+                {(PLAYBOOK_BASELINE * 100).toFixed(1)}% một cách đáng kể. Đây là thống kê mô tả —
+                quá khứ không lái được tương lai, nhưng giúp anh thấy thói quen chọn số của mình.
+              </p>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="grid" style={{ maxWidth: 560 }}>
+                  <thead>
+                    <tr>
+                      <th>Số</th>
+                      <th>Số kỳ đã chọn</th>
+                      <th>Số kỳ trúng</th>
+                      <th>Tỉ lệ trúng</th>
+                      <th>Đánh giá</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.slice(0, 15).map((st) => {
+                      const edge = st.hitRate - PLAYBOOK_BASELINE;
+                      return (
+                        <tr key={st.n}>
+                          <td className="num"><Ball n={st.n} size={26} /></td>
+                          <td className="num">{st.picks}</td>
+                          <td className="num">{st.hits}</td>
+                          <td className="num">{(st.hitRate * 100).toFixed(1)}%</td>
+                          <td>
+                            {edge > 0.05 ? (
+                              <span className="pill good">hợp tay</span>
+                            ) : edge < -0.05 ? (
+                              <span className="pill warn">lệch tay</span>
+                            ) : (
+                              <span className="muted">bình thường</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
+
+        <div style={{ marginTop: 12 }}>
+          <h4>Dựng vé kỳ tới từ sổ tay của anh</h4>
+          <p className="muted" style={{ fontSize: 13 }}>
+            Solver chạy trên điểm số "hợp tay" rút từ lịch sử chọn số của chính anh —
+            vẫn giữ ràng buộc tổ hợp (lẻ 2–4, tổng 100–250, ≤2 cặp liên tiếp).
+          </p>
+          <div className="row">
+            <div className="field">
+              <label>Số vé</label>
+              <select value={playbookK} onChange={(e) => setPlaybookK(Number(e.target.value))}>
+                {[1, 2, 3, 5, 8, 10].map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>&nbsp;</label>
+              <button onClick={buildFromPlaybook}>Dựng vé từ sổ tay</button>
+            </div>
+          </div>
+          {playbookTickets && (
+            <div style={{ overflowX: 'auto', marginTop: 8 }}>
+              <table className="grid">
+                <thead>
+                  <tr>
+                    <th>Vé</th>
+                    <th>6 số</th>
+                    <th>Lẻ</th>
+                    <th>Tổng</th>
+                    <th>Liên tiếp</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {playbookTickets.tickets.map((t, i) => (
+                    <tr key={i}>
+                      <td className="num">#{i + 1}</td>
+                      <td>{t.numbers.map((n) => <Ball key={n} n={n} size={26} />)}</td>
+                      <td className="num">{t.odd}/6</td>
+                      <td className="num">{t.sum}</td>
+                      <td className="num">{t.consec}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

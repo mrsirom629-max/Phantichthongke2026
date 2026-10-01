@@ -25,6 +25,8 @@ export interface SolverConfig {
 
 export interface EvoEntry {
   id: string;
+  /** 'user' = anh tự chọn số, 'system' = máy gợi ý (NN+Solver). Entry cũ thiếu trường này = 'system'. */
+  source: 'user' | 'system';
   /** Ngày kỳ cần đối chiếu (backtest) — hoặc rỗng nếu chờ "kỳ sau afterDate". */
   targetDate: string;
   afterDate: string;
@@ -38,6 +40,13 @@ export interface EvoEntry {
   actual: number[] | null;
   hits: number[] | null;
   meanHits: number | null;
+}
+
+/** Xác suất 1 số cụ thể trúng trong 1 kỳ: 6/55. */
+export const PLAYBOOK_BASELINE = 6 / 55; // ≈ 0.109
+
+export function entrySource(e: EvoEntry): 'user' | 'system' {
+  return e.source ?? 'system';
 }
 
 const dateKey = (s: string) => s.split('-').reverse().join('');
@@ -130,8 +139,7 @@ export function aggregateByConfig(entries: EvoEntry[]): ConfigAgg[] {
 }
 
 /** Gợi ý cải tiến dựa trên dữ liệu đã đối chiếu. */
-export function evolutionAdvice(entries: EvoEntry[]): string[] {
-  const done = entries.filter((e) => e.status === 'done');
+export function evolutionAdvice(entries: EvoEntry[]): string[] {  const done = entries.filter((e) => e.status === 'done');
   const tips: string[] = [];
   if (done.length === 0) {
     tips.push('Chưa có bản ghi nào được đối chiếu — hãy chạy backtest vài kỳ để bắt đầu vòng lặp.');
@@ -169,4 +177,75 @@ export function evolutionAdvice(entries: EvoEntry[]): string[] {
     );
   }
   return tips;
+}
+
+/* ── Sổ tay của người dùng: ghi nhận & so sánh ───────────────── */
+
+export interface UserNumStat {
+  n: number;
+  picks: number;
+  hits: number;
+  hitRate: number;
+}
+
+/**
+ * Phong độ từng số mà ANH đã chọn (chỉ tính các bản ghi đã đối chiếu):
+ * picks = số kỳ anh đưa số đó vào vé, hits = số kỳ nó trúng thật.
+ */
+export function userNumberStats(entries: EvoEntry[]): UserNumStat[] {
+  const map = new Map<number, { picks: number; hits: number }>();
+  for (const e of entries) {
+    if (entrySource(e) !== 'user' || e.status !== 'done' || !e.actual) continue;
+    const actualSet = new Set(e.actual);
+    const distinct = new Set<number>();
+    for (const t of e.tickets) for (const n of t) distinct.add(n);
+    distinct.forEach((n) => {
+      const s = map.get(n) ?? { picks: 0, hits: 0 };
+      s.picks++;
+      if (actualSet.has(n)) s.hits++;
+      map.set(n, s);
+    });
+  }
+  const out: UserNumStat[] = [];
+  map.forEach((s, n) => {
+    out.push({ n, picks: s.picks, hits: s.hits, hitRate: s.hits / s.picks });
+  });
+  out.sort((a, b) => b.picks - a.picks || b.hitRate - a.hitRate);
+  return out;
+}
+
+export interface SourceAgg {
+  n: number;
+  tickets: number;
+  meanHits: number | null;
+}
+
+/** So sánh "anh vs máy": mỗi bên bao nhiêu bản ghi, trúng TB/vé bao nhiêu. */
+export function sourceComparison(entries: EvoEntry[]): { user: SourceAgg; system: SourceAgg } {
+  const agg = (src: 'user' | 'system'): SourceAgg => {
+    const d = entries.filter(
+      (e) => entrySource(e) === src && e.status === 'done' && e.meanHits !== null,
+    );
+    return {
+      n: d.length,
+      tickets: d.reduce((a, e) => a + e.tickets.length, 0),
+      meanHits: d.length > 0 ? avg(d.map((e) => e.meanHits!)) : null,
+    };
+  };
+  return { user: agg('user'), system: agg('system') };
+}
+
+/**
+ * Điểm số cho solver từ sổ tay của anh: số nào "hợp tay"
+ * (tỉ lệ trúng khi chọn cao hơn kỳ vọng 6/55) được cộng điểm,
+ * số "lệch tay" bị trừ điểm — kẹp trong [0.2, 2].
+ * Đây là cách hệ thống "ghi nhận tối ưu" cho các kỳ tiếp theo.
+ */
+export function playbookScores(stats: UserNumStat[]): number[] {
+  const scores = new Array(55).fill(1);
+  for (const s of stats) {
+    const edge = (s.hitRate - PLAYBOOK_BASELINE) * 6;
+    scores[s.n - 1] = Math.min(2, Math.max(0.2, 1 + edge));
+  }
+  return scores;
 }
