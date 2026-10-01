@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MLP, buildDataset, mulberry32, splitChrono, topK } from '@/lib/nn';
-import { PRIZE_COUNTS, PRIZE_DIGITS } from '@/lib/constants';
+import { PRIZE_COUNTS, PRIZE_DIGITS, MB_PRIZE_SPEC } from '@/lib/constants';
 import {
   buildCooccurrenceGraph,
   dayLotoSet,
@@ -17,18 +17,14 @@ import {
   type LotoGraph,
 } from '@/lib/graph';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
-import { cmpDate } from '@/lib/stats';
+import { cmpDate, todayVN } from '@/lib/stats';
 import { useMasterdataLoad } from '@/lib/useMasterdataLoad';
 import MasterdataPanel from '@/components/MasterdataPanel';
-import type { DayResult, PrizeSet } from '@/lib/types';
+import type { DayResult, Mien, PrizeSet } from '@/lib/types';
 
 const LR = 0.5; // learning rate SGD
 const CHUNK_EPOCHS = 10; // số epoch mỗi nhịp setInterval -> không đơ UI
 const MIN_DAYS = 20; // ngưỡng dữ liệu tối thiểu
-
-const PRIZE_KEYS: (keyof PrizeSet)[] = [
-  'db', 'nhat', 'nhi', 'ba', 'tu', 'sau', 'bay', 'tam',
-];
 
 interface Score {
   p: number; // precision@k trung bình
@@ -55,16 +51,24 @@ function rndStr(rng: () => number, digits: number): string {
  * Sinh dữ liệu demo NGẪU NHIÊN (không phải kết quả thật) để thử nghiệm lab
  * khi chưa có seed. Càng minh họa rõ: dữ liệu ngẫu nhiên thì không học được gì.
  */
-function genDemoDays(n: number): DayResult[] {
+function genDemoDays(n: number, m: Mien): DayResult[] {
   const rng = mulberry32(20261001);
+  const spec = m === 'bac' ? MB_PRIZE_SPEC : null;
+  const keys = (Object.keys(spec ?? PRIZE_COUNTS) as (keyof PrizeSet)[]).filter(
+    (k) => (spec ? spec[k].count : PRIZE_COUNTS[k]) > 0,
+  );
+  const digitsOf = (k: keyof PrizeSet) =>
+    spec ? spec[k].digits : (PRIZE_DIGITS as Record<string, number>)[k];
   const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
   const d = new Date(2026, 6, 1);
   const days: DayResult[] = [];
   for (let i = 0; i < n; i++) {
     const prizes = {} as PrizeSet;
-    for (const key of PRIZE_KEYS) {
+    for (const key of keys) {
       const arr: string[] = [];
-      for (let c = 0; c < PRIZE_COUNTS[key]; c++) arr.push(rndStr(rng, PRIZE_DIGITS[key]));
+      const specEntry = spec ? spec[key] : null;
+      const count = specEntry ? specEntry.count : PRIZE_COUNTS[key];
+      for (let c = 0; c < count; c++) arr.push(rndStr(rng, digitsOf(key)));
       (prizes as unknown as Record<string, string[]>)[key] = arr;
     }
     const dd = String(d.getDate()).padStart(2, '0');
@@ -72,7 +76,7 @@ function genDemoDays(n: number): DayResult[] {
     days.push({
       date: `${dd}-${mm}-${d.getFullYear()}`,
       weekday: weekdays[d.getDay()],
-      mien: 'nam',
+      mien: m,
       provinces: [{ province: 'Demo', code: 'DEMO', prizes }],
     });
     d.setDate(d.getDate() + 1);
@@ -123,6 +127,14 @@ export default function LabPage() {
   const [hidden, setHidden] = useState(32);
   const [epochs, setEpochs] = useState(200);
   const [k, setK] = useState(10);
+  const LAB_MIEN_KEY = 'lab-mien-v1';
+  const [mien, setMien] = useState<Mien>(() => {
+    try {
+      return localStorage.getItem(LAB_MIEN_KEY) === 'bac' ? 'bac' : 'nam';
+    } catch {
+      return 'nam';
+    }
+  });
   const [days, setDays] = useState<DayResult[] | null>(null);
   const [isDemo, setIsDemo] = useState(false);
   const [liveCount, setLiveCount] = useState(0);
@@ -158,8 +170,8 @@ export default function LabPage() {
     };
   }, []);
 
-  /** Tải 90 ngày gần nhất QUA MASTERDATA: chỉ tải ngày thiếu, ghi bổ sung không trùng. */
-  const loadDays = async () => {
+  /** Tải 90 ngày gần nhất QUA MASTERDATA (đúng miền): chỉ tải ngày thiếu, ghi bổ sung không trùng. */
+  const loadDaysFor = async (m: Mien) => {
     setPhase('loading');
     setErr('');
     setResults(null);
@@ -167,7 +179,7 @@ export default function LabPage() {
     setGraphView(null);
     setGraphEval(null);
     setSelNode(null);
-    const st = await loadMaster(90);
+    const st = await loadMaster(90, todayVN(), m);
     if (!st) {
       setErr(masterError || 'Không tải được dữ liệu. Hãy kiểm tra lại rồi thử lại.');
       setPhase('idle');
@@ -179,8 +191,30 @@ export default function LabPage() {
     setPhase('ready');
   };
 
+  const loadDays = () => loadDaysFor(mien);
+
+  /** Đổi miền: reset lab rồi tải dữ liệu miền mới. */
+  const switchMien = (m: Mien) => {
+    if (m === mien || masterLoading || phase === 'training') return;
+    setMien(m);
+    try {
+      localStorage.setItem(LAB_MIEN_KEY, m);
+    } catch {
+      /* bỏ qua */
+    }
+    setDays(null);
+    setPhase('idle');
+    setResults(null);
+    setGraphView(null);
+    setGraphEval(null);
+    setSelNode(null);
+    setLosses([]);
+    setErr('');
+    loadDaysFor(m);
+  };
+
   const useDemo = () => {
-    setDays(genDemoDays(90));
+    setDays(genDemoDays(90, mien));
     setIsDemo(true);
     setErr('');
     setResults(null);
@@ -324,6 +358,24 @@ export default function LabPage() {
       <div className="card">
         <h3>1. Dữ liệu</h3>
         <div className="row">
+          <div className="field">
+            <label>Miền</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['nam', 'bac'] as Mien[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mien === m ? '' : 'ghost'}
+                  onClick={() => switchMien(m)}
+                  disabled={masterLoading || phase === 'training'}
+                >
+                  {m === 'nam' ? 'Miền Nam' : 'Miền Bắc'}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 8 }}>
           <button className="ghost" onClick={loadDays} disabled={masterLoading || phase === 'training'}>
             {masterLoading
               ? `${masterProg.phase || 'Đang tải'}${masterProg.total > 0 ? ` ${masterProg.done}/${masterProg.total}` : ''}...`
@@ -331,7 +383,7 @@ export default function LabPage() {
           </button>
           {days && !isDemo && (
             <span className="muted">
-              Đã có <b>{days.length}</b> ngày{' '}
+              Đã có <b>{days.length}</b> ngày ({mien === 'nam' ? 'Miền Nam' : 'Miền Bắc'}){' '}
               <span className={seedCount === 0 ? 'pill good' : 'pill warn'}>
                 {seedCount === 0
                   ? `${liveCount} ngày trực tiếp Minh Ngọc`

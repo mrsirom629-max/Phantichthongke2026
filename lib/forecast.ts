@@ -11,7 +11,7 @@
  *
  * Module này thuần túy (client & server đều dùng được).
  */
-import type { DayResult } from './types';
+import type { DayResult, Mien } from './types';
 import { lotoOf } from './stats';
 
 export type ForecastModel = 'mlp' | 'freq' | 'graph';
@@ -44,6 +44,7 @@ export interface ForecastEntry {
   id: string;
   createdAt: string; // ISO
   targetDate: string; // DD-MM-YYYY — ngày được mô phỏng
+  mien: Mien; // miền của mô phỏng (entry cũ thiếu trường này = 'nam')
   model: ForecastModel;
   modelVersion: string;
   mode: 'shadow'; // luôn shadow: chỉ ghi nhận để đo lường
@@ -55,6 +56,11 @@ export interface ForecastEntry {
   reconciledAt?: string; // ISO
   metrics?: ForecastMetrics;
   note?: string;
+}
+
+/** Miền của entry — tương thích ngược: entry cũ chưa có mien thì là 'nam'. */
+export function entryMien(e: ForecastEntry): Mien {
+  return e.mien === 'bac' ? 'bac' : 'nam';
 }
 
 export const MODEL_VERSIONS: Record<ForecastModel, string> = {

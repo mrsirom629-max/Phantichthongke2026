@@ -6,6 +6,7 @@ import { freqTopK, predictTopK, trainForecastMLP, type TrainProgress } from '@/l
 import { graphTopK } from '@/lib/graph';
 import {
   MODEL_LABELS,
+  entryMien,
   fmtPct,
   scoreForecast,
   truthLotoSet,
@@ -13,7 +14,7 @@ import {
   type ForecastModel,
 } from '@/lib/forecast';
 import { cmpDate, parseD, todayVN } from '@/lib/stats';
-import type { DayResult } from '@/lib/types';
+import type { DayResult, Mien } from '@/lib/types';
 
 const LOCAL_KEY = 'fc-log-local-v1';
 const DEFAULT_K = 15;
@@ -50,6 +51,14 @@ function displayDate(d: string): string {
 export default function ForecastPage() {
   const [targetDate, setTargetDate] = useState(todayVN());
   const [model, setModel] = useState<ForecastModel>('mlp');
+  const FC_MIEN_KEY = 'fc-mien-v1';
+  const [mien, setMien] = useState<Mien>(() => {
+    try {
+      return localStorage.getItem(FC_MIEN_KEY) === 'bac' ? 'bac' : 'nam';
+    } catch {
+      return 'nam';
+    }
+  });
   const [k, setK] = useState(DEFAULT_K);
   const [lookback, setLookback] = useState(10);
   const [hidden, setHidden] = useState(64);
@@ -84,13 +93,30 @@ export default function ForecastPage() {
     refreshLog();
   }, [refreshLog]);
 
-  /** Nhật ký gộp: server là chính, bản local ghi đè theo id (khi chưa có token). */
+  /** Nhật ký gộp theo miền đang chọn: server là chính, bản local ghi đè theo id. */
   const merged: ForecastEntry[] = useMemo(() => {
     const byId = new Map<string, ForecastEntry>();
     for (const e of entries) byId.set(e.id, e);
     for (const e of localEntries) byId.set(e.id, e);
-    return Array.from(byId.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [entries, localEntries]);
+    return Array.from(byId.values())
+      .filter((e) => entryMien(e) === mien)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }, [entries, localEntries, mien]);
+
+  /** Đổi miền: reset mô phỏng đang dở, giữ nguyên form. */
+  const switchMien = (m: Mien) => {
+    if (m === mien || busy) return;
+    setMien(m);
+    try {
+      localStorage.setItem(FC_MIEN_KEY, m);
+    } catch {
+      /* bỏ qua */
+    }
+    setSim(null);
+    setErr('');
+    setNotice('');
+    if (phase === 'preview' || phase === 'done') setPhase('idle');
+  };
 
   const simulate = async () => {
     if (!parseD(targetDate)) {
@@ -103,8 +129,8 @@ export default function ForecastPage() {
     setPhase('loading-days');
     setDayProg({ done: 0, total: 90 });
     try {
-      // Kỷ luật thời gian: chỉ dùng các ngày TRƯỚC ngày mục tiêu
-      const r = await loadDaysLive(90, (done, total) => setDayProg({ done, total }));
+      // Kỷ luật thời gian: chỉ dùng các ngày TRƯỚC ngày mục tiêu (đúng miền)
+      const r = await loadDaysLive(90, (done, total) => setDayProg({ done, total }), mien);
       const past = r.days.filter((d) => cmpDate(d.date, targetDate) < 0);
       if (past.length < lookback + 5) {
         throw new Error(
@@ -147,6 +173,7 @@ export default function ForecastPage() {
     setErr('');
     const payload = {
       targetDate,
+      mien,
       model,
       k,
       numbers: sim.numbers,
@@ -232,7 +259,9 @@ export default function ForecastPage() {
       const e = locals[i];
       if (e.status !== 'pending' || cmpDate(e.targetDate, todayVN()) > 0) continue;
       try {
-        const res = await fetch(`/api/results?date=${encodeURIComponent(e.targetDate)}`);
+        const res = await fetch(
+          `/api/results?date=${encodeURIComponent(e.targetDate)}&mien=${entryMien(e)}`,
+        );
         const j = (await res.json()) as { source?: string; data?: DayResult | null };
         if (j.source !== 'minhngoc' || !j.data) continue;
         const metrics = scoreForecast(e.numbers, truthLotoSet(j.data));
@@ -294,6 +323,33 @@ export default function ForecastPage() {
         để đối chiếu và rút ra độ chính xác, <b>không dùng để quyết định</b>. Xổ số
         là các kỳ quay ngẫu nhiên độc lập — không có mô hình nào dự đoán được kết quả.
         Điểm số mô hình <b>chưa hiệu chuẩn</b>, không phải xác suất trúng.
+      </div>
+
+      <div className="card">
+        <div className="row">
+          <div className="field">
+            <label>Miền</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['nam', 'bac'] as Mien[]).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className={mien === m ? '' : 'ghost'}
+                  onClick={() => switchMien(m)}
+                  disabled={busy}
+                >
+                  {m === 'nam' ? 'Miền Nam' : 'Miền Bắc'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <label>&nbsp;</label>
+            <span className="muted" style={{ fontSize: 13 }}>
+              Mô phỏng, nhật ký và mức độ tiên hóa đều tính riêng theo miền.
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="card">
@@ -395,7 +451,8 @@ export default function ForecastPage() {
         {(phase === 'preview' || phase === 'saving' || phase === 'done') && sim && (
           <div style={{ marginTop: 12 }}>
             <h4 style={{ margin: '0 0 8px' }}>
-              Kết quả mô phỏng cho {displayDate(targetDate)} — {MODEL_LABELS[model]} (top {k})
+              Kết quả mô phỏng {mien === 'nam' ? 'Miền Nam' : 'Miền Bắc'} cho{' '}
+              {displayDate(targetDate)} — {MODEL_LABELS[model]} (top {k})
             </h4>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {sim.numbers.map((n, i) => (
@@ -433,7 +490,7 @@ export default function ForecastPage() {
       </div>
 
       <div className="card">
-        <h3>2. Nhật ký mô phỏng</h3>
+        <h3>2. Nhật ký mô phỏng — {mien === 'nam' ? 'Miền Nam' : 'Miền Bắc'}</h3>
         <p className="muted" style={{ fontSize: 13 }}>
           Mỗi mô phỏng được ghi <b>trước</b> giờ quay (snapshot trước outcome). Đối chiếu tự
           động lúc <b>17h30 hàng ngày</b> sau khi có số thật
@@ -494,7 +551,7 @@ export default function ForecastPage() {
       </div>
 
       <div className="card">
-        <h3>3. Đối chiếu &amp; Mức độ tiên hóa</h3>
+        <h3>3. Đối chiếu &amp; Mức độ tiên hóa — {mien === 'nam' ? 'Miền Nam' : 'Miền Bắc'}</h3>
         <div className="row">
           <button className="ghost" onClick={reconcileAll}>
             Đối chiếu ngay

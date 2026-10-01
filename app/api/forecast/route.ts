@@ -32,7 +32,8 @@ function isNumStr(v: unknown): v is string {
 
 /**
  * POST /api/forecast — ghi một mô phỏng vào nhật ký (snapshot TRƯỚC outcome).
- * Body: { targetDate, model, k, numbers[], params, dataRange, note? }
+ * Body: { targetDate, mien?, model, k, numbers[], params, dataRange, note? }
+ * (mien: 'nam' | 'bac', mặc định 'nam').
  * Thiếu GITHUB_TOKEN trên production → 501 (UI lưu tạm localStorage).
  */
 export async function POST(req: NextRequest) {
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
   const model = b.model;
   const k = typeof b.k === 'number' ? Math.floor(b.k) : 0;
   const numbers = Array.isArray(b.numbers) ? b.numbers : [];
+  const mien = b.mien === 'bac' ? 'bac' : 'nam';
 
   if (!parseD(targetDate)) {
     return NextResponse.json({ error: 'targetDate phải dạng DD-MM-YYYY.' }, { status: 400 });
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
     id: `fc-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
     createdAt: new Date().toISOString(),
     targetDate,
+    mien,
     model,
     modelVersion: MODEL_VERSIONS[model],
     mode: 'shadow',

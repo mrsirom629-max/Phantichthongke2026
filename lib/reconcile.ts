@@ -7,17 +7,17 @@
  */
 import { fetchDayDetailed } from './minhngoc';
 import { cmpDate, todayVN } from './stats';
-import { scoreForecast, truthLotoSet, type ForecastEntry } from './forecast';
+import { entryMien, scoreForecast, truthLotoSet, type ForecastEntry } from './forecast';
 
 /**
- * Đối chiếu một entry pending với kết quả thật của targetDate.
+ * Đối chiếu một entry pending với kết quả thật của targetDate (đúng miền).
  * Trả về entry đã cập nhật, hoặc null khi chưa đối chiếu được.
  */
 export async function reconcileOne(entry: ForecastEntry): Promise<ForecastEntry | null> {
   if (entry.status !== 'pending') return null;
   if (cmpDate(entry.targetDate, todayVN()) > 0) return null; // ngày mục tiêu còn ở tương lai
 
-  const d = await fetchDayDetailed(entry.targetDate);
+  const d = await fetchDayDetailed(entry.targetDate, entryMien(entry));
   if (d.stage !== 'ok' || !d.data) return null; // chưa có số thật → giữ pending
 
   const truth = truthLotoSet(d.data);
