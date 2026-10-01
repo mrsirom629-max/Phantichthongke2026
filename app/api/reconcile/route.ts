@@ -4,11 +4,12 @@ import { reconcileOne } from '@/lib/reconcile';
 import { fmtPct } from '@/lib/forecast';
 
 export const dynamic = 'force-dynamic';
-// Cron đối chiếu — đọc trang TRỰC TIẾP ở khung giờ quay, sớm nhất có thể:
-//  - XSMN: 16:30–16:40 giờ VN (mỗi 2 phút) — ngay khi đang quay / vừa quay xong
-//  - XSMB: 18:15–18:30 giờ VN (mỗi 3 phút)
-//  - Quét vét cuối ngày: 17:30 giờ VN
-// Chỉ đối chiếu khi đủ 100% số liệu; thiếu thì giữ pending cho tick tiếp theo.
+// Cron đối chiếu 1 lần/ngày lúc 18:35 giờ VN (sau giờ quay cả 2 miền:
+// XSMN ~16:15–16:35, XSMB ~18:15–18:30) — giới hạn gói Hobby của Vercel
+// chỉ cho phép cron chạy 1 lần/ngày.
+// Đọc trang TRỰC TIẾP trước (sớm nhất), rồi tới trang lưu trữ theo ngày.
+// Chỉ đối chiếu khi đủ 100% số liệu; thiếu thì giữ pending.
+// Muốn đối chiếu sớm hơn trong ngày: bấm "Đối chiếu ngay" trên trang Dự báo.
 export const maxDuration = 60;
 
 /**
