@@ -22,6 +22,44 @@ function fromInputValue(ymd: string): string {
   return `${d}-${m}-${y}`;
 }
 
+const VIEW_KEY = 'tk-view-v1';
+interface ViewState {
+  mien: Mien;
+  province: string;
+  ranges: Record<string, { from: string; to: string }>;
+}
+function defaultView(): ViewState {
+  const to = todayVN();
+  const from = addDays(to, -29);
+  return { mien: 'nam', province: 'all', ranges: { nam: { from, to }, bac: { from, to } } };
+}
+/** Đọc khung nhìn đã lưu (miền + khoảng ngày từng miền + tỉnh). */
+function loadViewState(): ViewState | null {
+  try {
+    const raw = localStorage.getItem(VIEW_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as Partial<ViewState>;
+    if (v.mien !== 'nam' && v.mien !== 'bac') return null;
+    const d = defaultView();
+    return {
+      mien: v.mien,
+      province: typeof v.province === 'string' ? v.province : 'all',
+      ranges: { ...d.ranges, ...(v.ranges ?? {}) },
+    };
+  } catch {
+    return null;
+  }
+}
+/** Lưu khung nhìn (nhận updater để gộp với giá trị cũ). */
+function saveViewState(updater: (prev: ViewState) => ViewState): void {
+  try {
+    const prev = loadViewState() ?? defaultView();
+    localStorage.setItem(VIEW_KEY, JSON.stringify(updater(prev)));
+  } catch {
+    /* bỏ qua khi không ghi được */
+  }
+}
+
 /** Danh sách tỉnh XSMN duy nhất, sắp xếp theo alphabet tiếng Việt. */
 function provinceList(): string[] {
   const set = new Set<string>();
@@ -88,14 +126,28 @@ function StatTable({ title, rows }: { title: string; rows: NumberStat[] }) {
 }
 
 export default function StatsPage() {
-  const [mien, setMien] = useState<Mien>('nam');
+  // Khôi phục khung nhìn lần trước (miền + khoảng ngày từng miền + tỉnh)
+  // ngay khi khởi tạo state — mở lại trang/tab giữ nguyên khung nhìn cũ.
+  const savedView = useMemo(() => loadViewState() ?? defaultView(), []);
+  const validRange = (r: { from: string; to: string } | undefined) => {
+    const d = defaultView().ranges.nam;
+    if (!r || !isValidDate(r.from) || !isValidDate(r.to) || cmpDate(r.from, r.to) > 0)
+      return d;
+    return r;
+  };
+  const [mien, setMien] = useState<Mien>(savedView.mien);
+  const [fromDate, setFromDate] = useState(() => validRange(savedView.ranges[savedView.mien]).from);
+  const [toDate, setToDate] = useState(() => validRange(savedView.ranges[savedView.mien]).to);
+  const [province, setProvince] = useState<string>(() => {
+    const list = savedView.mien === 'bac' ? ['Miền Bắc'] : provinceList();
+    return list.includes(savedView.province) || savedView.province === 'all'
+      ? savedView.province
+      : 'all';
+  });
   const provinces = useMemo(
     () => (mien === 'bac' ? ['Miền Bắc'] : provinceList()),
     [mien],
   );
-  const [fromDate, setFromDate] = useState(() => addDays(todayVN(), -29));
-  const [toDate, setToDate] = useState(() => todayVN());
-  const [province, setProvince] = useState<string>('all');
   const [cycle, setCycle] = useState(0);
   const [formError, setFormError] = useState<string | null>(null);
   const {
@@ -104,6 +156,7 @@ export default function StatsPage() {
     error,
     data: master,
     load,
+    refresh,
   } = useMasterdataLoad();
   /**
    * Con trỏ vòng quét: ngày cuối của vòng TIẾP THEO (null = bắt đầu từ hôm nay).
@@ -144,12 +197,40 @@ export default function StatsPage() {
     [load],
   );
 
-  useEffect(() => {
-    const to = todayVN();
-    loadData(addDays(to, -29), to, true, 'nam');
-  }, [loadData]);
+  /**
+   * Hiển thị lại khoảng ngày từ kho — KHÔNG tải ngày mới.
+   * Dùng khi mở trang / đổi miền / đổi khoảng đã lưu: dữ liệu đã có thì
+   * hiện ngay, không bắt tải lại từ đầu.
+   */
+  const showRange = useCallback(
+    async (from: string, to: string, m: Mien) => {
+      setFormError(null);
+      const st = await refresh(from, to, m);
+      if (st) {
+        windowEndRef.current = addDays(st.summary.windowFrom, -1);
+        setCycle(st.summary.haveCount > 0 ? 1 : 0);
+      }
+    },
+    [refresh],
+  );
 
-  /** Đổi miền: reset vòng quét, tải lại từ 30 ngày gần nhất của miền mới. */
+  // Mở trang: CHỈ ĐỌC kho và hiển thị — không tự tải lại từ đầu.
+  // (Khung nhìn đã được khôi phục ở khởi tạo state phía trên.)
+  useEffect(() => {
+    showRange(fromDate, toDate, mien);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Nhớ khung nhìn mỗi khi đổi (để mở lại trang/tab vẫn giữ nguyên)
+  useEffect(() => {
+    saveViewState((prev) => ({
+      mien,
+      province,
+      ranges: { ...prev.ranges, [mien]: { from: fromDate, to: toDate } },
+    }));
+  }, [mien, fromDate, toDate, province]);
+
+  /** Đổi miền: khôi phục khoảng ngày đã dùng của miền đó, chỉ đọc kho. */
   const handleMien = (m: Mien) => {
     if (m === mien || loading) return;
     setMien(m);
@@ -157,11 +238,13 @@ export default function StatsPage() {
     setCycle(0);
     setFormError(null);
     windowEndRef.current = null;
-    const to = todayVN();
-    const from = addDays(to, -29);
+    const saved = loadViewState();
+    const r = saved?.ranges[m] ?? { from: addDays(todayVN(), -29), to: todayVN() };
+    const from = isValidDate(r.from) ? r.from : addDays(todayVN(), -29);
+    const to = isValidDate(r.to) ? r.to : todayVN();
     setFromDate(from);
     setToDate(to);
-    loadData(from, to, true, m);
+    showRange(from, to, m);
   };
 
   /** Dữ liệu ngày trong khoảng — lấy từ masterdata (đã sắp xếp tăng dần). */
