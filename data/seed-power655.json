@@ -1,0 +1,2046 @@
+{
+ "generatedAt": "2026-10-01T07:55:16.822Z",
+ "note": "DỮ LIỆU MẪU — không phải kết quả thật. Kỳ quay thật lấy từ Minh Ngọc.",
+ "draws": [
+  {
+   "ky": "01404",
+   "date": "29-09-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    5,
+    6,
+    18,
+    24,
+    31,
+    53
+   ],
+   "bonus": 23,
+   "jackpot1": 77291417191,
+   "jackpot2": 4520152646,
+   "seed": true
+  },
+  {
+   "ky": "01403",
+   "date": "26-09-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    20,
+    21,
+    25,
+    29,
+    44,
+    54
+   ],
+   "bonus": 21,
+   "jackpot1": 78155275532,
+   "jackpot2": 4880500553,
+   "seed": true
+  },
+  {
+   "ky": "01402",
+   "date": "24-09-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    23,
+    32,
+    36,
+    38,
+    44,
+    48
+   ],
+   "bonus": 40,
+   "jackpot1": 67745653234,
+   "jackpot2": 3126363059,
+   "seed": true
+  },
+  {
+   "ky": "01401",
+   "date": "22-09-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    6,
+    13,
+    16,
+    26,
+    50,
+    52
+   ],
+   "bonus": 14,
+   "jackpot1": 72870932018,
+   "jackpot2": 4881677181,
+   "seed": true
+  },
+  {
+   "ky": "01400",
+   "date": "19-09-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    7,
+    14,
+    16,
+    36,
+    41,
+    51
+   ],
+   "bonus": 31,
+   "jackpot1": 59835953405,
+   "jackpot2": 3743198495,
+   "seed": true
+  },
+  {
+   "ky": "01399",
+   "date": "17-09-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    18,
+    22,
+    36,
+    40,
+    51,
+    55
+   ],
+   "bonus": 15,
+   "jackpot1": 73377219976,
+   "jackpot2": 3213561853,
+   "seed": true
+  },
+  {
+   "ky": "01398",
+   "date": "15-09-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    8,
+    11,
+    13,
+    20,
+    25,
+    45
+   ],
+   "bonus": 19,
+   "jackpot1": 31808110100,
+   "jackpot2": 3895372983,
+   "seed": true
+  },
+  {
+   "ky": "01397",
+   "date": "12-09-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    5,
+    11,
+    15,
+    21,
+    30
+   ],
+   "bonus": 5,
+   "jackpot1": 33141433119,
+   "jackpot2": 4505880905,
+   "seed": true
+  },
+  {
+   "ky": "01396",
+   "date": "10-09-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    13,
+    15,
+    27,
+    47,
+    50
+   ],
+   "bonus": 17,
+   "jackpot1": 84275769104,
+   "jackpot2": 4591041681,
+   "seed": true
+  },
+  {
+   "ky": "01395",
+   "date": "08-09-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    12,
+    21,
+    28,
+    31,
+    45,
+    50
+   ],
+   "bonus": 40,
+   "jackpot1": 54257668575,
+   "jackpot2": 4275409894,
+   "seed": true
+  },
+  {
+   "ky": "01394",
+   "date": "05-09-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    8,
+    9,
+    17,
+    34,
+    44,
+    54
+   ],
+   "bonus": 11,
+   "jackpot1": 42261343724,
+   "jackpot2": 3678038423,
+   "seed": true
+  },
+  {
+   "ky": "01393",
+   "date": "03-09-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    26,
+    28,
+    29,
+    31,
+    32,
+    47
+   ],
+   "bonus": 32,
+   "jackpot1": 64015990446,
+   "jackpot2": 4470095867,
+   "seed": true
+  },
+  {
+   "ky": "01392",
+   "date": "01-09-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    8,
+    20,
+    26,
+    27,
+    39,
+    46
+   ],
+   "bonus": 42,
+   "jackpot1": 33262931373,
+   "jackpot2": 3834028784,
+   "seed": true
+  },
+  {
+   "ky": "01391",
+   "date": "29-08-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    4,
+    18,
+    33,
+    53,
+    54
+   ],
+   "bonus": 50,
+   "jackpot1": 63528183151,
+   "jackpot2": 3798096955,
+   "seed": true
+  },
+  {
+   "ky": "01390",
+   "date": "27-08-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    8,
+    12,
+    31,
+    42,
+    45,
+    48
+   ],
+   "bonus": 24,
+   "jackpot1": 64551330222,
+   "jackpot2": 4549620291,
+   "seed": true
+  },
+  {
+   "ky": "01389",
+   "date": "25-08-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    9,
+    22,
+    33,
+    34,
+    39
+   ],
+   "bonus": 19,
+   "jackpot1": 59457606847,
+   "jackpot2": 3872983755,
+   "seed": true
+  },
+  {
+   "ky": "01388",
+   "date": "22-08-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    11,
+    18,
+    31,
+    40,
+    45,
+    55
+   ],
+   "bonus": 29,
+   "jackpot1": 47340983008,
+   "jackpot2": 3903639345,
+   "seed": true
+  },
+  {
+   "ky": "01387",
+   "date": "20-08-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    4,
+    12,
+    29,
+    38,
+    47,
+    53
+   ],
+   "bonus": 27,
+   "jackpot1": 94617434688,
+   "jackpot2": 4579831047,
+   "seed": true
+  },
+  {
+   "ky": "01386",
+   "date": "18-08-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    7,
+    11,
+    35,
+    53,
+    54,
+    55
+   ],
+   "bonus": 33,
+   "jackpot1": 81268313208,
+   "jackpot2": 3831853464,
+   "seed": true
+  },
+  {
+   "ky": "01385",
+   "date": "15-08-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    1,
+    4,
+    10,
+    32,
+    40,
+    51
+   ],
+   "bonus": 5,
+   "jackpot1": 89308593189,
+   "jackpot2": 4209154677,
+   "seed": true
+  },
+  {
+   "ky": "01384",
+   "date": "13-08-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    2,
+    3,
+    15,
+    29,
+    39,
+    53
+   ],
+   "bonus": 28,
+   "jackpot1": 70222821014,
+   "jackpot2": 3020172799,
+   "seed": true
+  },
+  {
+   "ky": "01383",
+   "date": "11-08-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    4,
+    34,
+    39,
+    46,
+    48,
+    51
+   ],
+   "bonus": 40,
+   "jackpot1": 83405177381,
+   "jackpot2": 4024423098,
+   "seed": true
+  },
+  {
+   "ky": "01382",
+   "date": "08-08-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    6,
+    17,
+    27,
+    31,
+    44,
+    50
+   ],
+   "bonus": 53,
+   "jackpot1": 94338871520,
+   "jackpot2": 3504661740,
+   "seed": true
+  },
+  {
+   "ky": "01381",
+   "date": "06-08-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    9,
+    15,
+    27,
+    30,
+    41
+   ],
+   "bonus": 7,
+   "jackpot1": 84256172964,
+   "jackpot2": 3272205322,
+   "seed": true
+  },
+  {
+   "ky": "01380",
+   "date": "04-08-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    15,
+    24,
+    28,
+    41,
+    48,
+    52
+   ],
+   "bonus": 55,
+   "jackpot1": 63803382643,
+   "jackpot2": 3690245107,
+   "seed": true
+  },
+  {
+   "ky": "01379",
+   "date": "01-08-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    1,
+    14,
+    27,
+    43,
+    49,
+    51
+   ],
+   "bonus": 10,
+   "jackpot1": 97268130595,
+   "jackpot2": 3120970970,
+   "seed": true
+  },
+  {
+   "ky": "01378",
+   "date": "30-07-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    7,
+    19,
+    24,
+    25,
+    34,
+    46
+   ],
+   "bonus": 39,
+   "jackpot1": 45405662022,
+   "jackpot2": 4459906669,
+   "seed": true
+  },
+  {
+   "ky": "01377",
+   "date": "28-07-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    2,
+    7,
+    10,
+    17,
+    30,
+    35
+   ],
+   "bonus": 47,
+   "jackpot1": 78565188809,
+   "jackpot2": 4549902618,
+   "seed": true
+  },
+  {
+   "ky": "01376",
+   "date": "25-07-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    8,
+    18,
+    26,
+    36,
+    45,
+    55
+   ],
+   "bonus": 8,
+   "jackpot1": 48983445314,
+   "jackpot2": 3270241069,
+   "seed": true
+  },
+  {
+   "ky": "01375",
+   "date": "23-07-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    8,
+    10,
+    14,
+    29,
+    48,
+    53
+   ],
+   "bonus": 48,
+   "jackpot1": 47728979191,
+   "jackpot2": 3463629787,
+   "seed": true
+  },
+  {
+   "ky": "01374",
+   "date": "21-07-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    16,
+    20,
+    25,
+    29,
+    34,
+    48
+   ],
+   "bonus": 5,
+   "jackpot1": 77697550668,
+   "jackpot2": 4249453097,
+   "seed": true
+  },
+  {
+   "ky": "01373",
+   "date": "18-07-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    4,
+    11,
+    24,
+    25,
+    37,
+    45
+   ],
+   "bonus": 33,
+   "jackpot1": 35903133524,
+   "jackpot2": 3464391493,
+   "seed": true
+  },
+  {
+   "ky": "01372",
+   "date": "16-07-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    18,
+    25,
+    33,
+    36,
+    50,
+    51
+   ],
+   "bonus": 18,
+   "jackpot1": 93334812510,
+   "jackpot2": 4698985443,
+   "seed": true
+  },
+  {
+   "ky": "01371",
+   "date": "14-07-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    14,
+    20,
+    34,
+    35,
+    38,
+    55
+   ],
+   "bonus": 1,
+   "jackpot1": 61012176908,
+   "jackpot2": 4723407782,
+   "seed": true
+  },
+  {
+   "ky": "01370",
+   "date": "11-07-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    13,
+    33,
+    34,
+    41,
+    51,
+    53
+   ],
+   "bonus": 4,
+   "jackpot1": 78586832501,
+   "jackpot2": 4115546279,
+   "seed": true
+  },
+  {
+   "ky": "01369",
+   "date": "09-07-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    1,
+    12,
+    16,
+    28,
+    32,
+    37
+   ],
+   "bonus": 48,
+   "jackpot1": 59095732092,
+   "jackpot2": 4421125104,
+   "seed": true
+  },
+  {
+   "ky": "01368",
+   "date": "07-07-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    6,
+    7,
+    15,
+    42,
+    45,
+    55
+   ],
+   "bonus": 37,
+   "jackpot1": 57562473893,
+   "jackpot2": 4634493887,
+   "seed": true
+  },
+  {
+   "ky": "01367",
+   "date": "04-07-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    1,
+    2,
+    21,
+    34,
+    36,
+    51
+   ],
+   "bonus": 3,
+   "jackpot1": 48933592922,
+   "jackpot2": 3567870665,
+   "seed": true
+  },
+  {
+   "ky": "01366",
+   "date": "02-07-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    10,
+    17,
+    25,
+    31,
+    38,
+    39
+   ],
+   "bonus": 18,
+   "jackpot1": 53111566505,
+   "jackpot2": 4707053460,
+   "seed": true
+  },
+  {
+   "ky": "01365",
+   "date": "30-06-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    12,
+    36,
+    38,
+    45,
+    54
+   ],
+   "bonus": 35,
+   "jackpot1": 80622330002,
+   "jackpot2": 3797160970,
+   "seed": true
+  },
+  {
+   "ky": "01364",
+   "date": "27-06-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    8,
+    12,
+    20,
+    30,
+    43,
+    55
+   ],
+   "bonus": 1,
+   "jackpot1": 45262290728,
+   "jackpot2": 4875722324,
+   "seed": true
+  },
+  {
+   "ky": "01363",
+   "date": "25-06-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    12,
+    21,
+    38,
+    41,
+    44
+   ],
+   "bonus": 1,
+   "jackpot1": 59553395071,
+   "jackpot2": 3551571007,
+   "seed": true
+  },
+  {
+   "ky": "01362",
+   "date": "23-06-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    18,
+    30,
+    42,
+    44,
+    50,
+    55
+   ],
+   "bonus": 33,
+   "jackpot1": 69843955980,
+   "jackpot2": 4913896829,
+   "seed": true
+  },
+  {
+   "ky": "01361",
+   "date": "20-06-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    4,
+    7,
+    11,
+    15,
+    32,
+    50
+   ],
+   "bonus": 48,
+   "jackpot1": 73278600845,
+   "jackpot2": 3667457105,
+   "seed": true
+  },
+  {
+   "ky": "01360",
+   "date": "18-06-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    11,
+    26,
+    31,
+    35,
+    41,
+    42
+   ],
+   "bonus": 47,
+   "jackpot1": 84727855836,
+   "jackpot2": 4896529024,
+   "seed": true
+  },
+  {
+   "ky": "01359",
+   "date": "16-06-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    11,
+    19,
+    28,
+    30,
+    41,
+    43
+   ],
+   "bonus": 37,
+   "jackpot1": 58128831174,
+   "jackpot2": 4285197752,
+   "seed": true
+  },
+  {
+   "ky": "01358",
+   "date": "13-06-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    7,
+    21,
+    33,
+    34,
+    51,
+    54
+   ],
+   "bonus": 29,
+   "jackpot1": 75473365075,
+   "jackpot2": 3582416891,
+   "seed": true
+  },
+  {
+   "ky": "01357",
+   "date": "11-06-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    6,
+    35,
+    44,
+    45,
+    47
+   ],
+   "bonus": 24,
+   "jackpot1": 73137841916,
+   "jackpot2": 4402237195,
+   "seed": true
+  },
+  {
+   "ky": "01356",
+   "date": "09-06-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    5,
+    8,
+    29,
+    37,
+    43,
+    46
+   ],
+   "bonus": 8,
+   "jackpot1": 61206018375,
+   "jackpot2": 3237242438,
+   "seed": true
+  },
+  {
+   "ky": "01355",
+   "date": "06-06-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    13,
+    19,
+    21,
+    24,
+    25,
+    44
+   ],
+   "bonus": 51,
+   "jackpot1": 99578733516,
+   "jackpot2": 4673365647,
+   "seed": true
+  },
+  {
+   "ky": "01354",
+   "date": "04-06-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    10,
+    25,
+    29,
+    32,
+    53,
+    55
+   ],
+   "bonus": 6,
+   "jackpot1": 52656089758,
+   "jackpot2": 4418887610,
+   "seed": true
+  },
+  {
+   "ky": "01353",
+   "date": "02-06-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    4,
+    7,
+    9,
+    17,
+    35,
+    48
+   ],
+   "bonus": 46,
+   "jackpot1": 75010458885,
+   "jackpot2": 4679735995,
+   "seed": true
+  },
+  {
+   "ky": "01352",
+   "date": "30-05-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    6,
+    16,
+    24,
+    29,
+    46
+   ],
+   "bonus": 10,
+   "jackpot1": 87993973335,
+   "jackpot2": 4389328830,
+   "seed": true
+  },
+  {
+   "ky": "01351",
+   "date": "28-05-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    20,
+    26,
+    32,
+    36,
+    49
+   ],
+   "bonus": 6,
+   "jackpot1": 74867332698,
+   "jackpot2": 4928229389,
+   "seed": true
+  },
+  {
+   "ky": "01350",
+   "date": "26-05-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    6,
+    15,
+    16,
+    20,
+    32,
+    47
+   ],
+   "bonus": 9,
+   "jackpot1": 67064877483,
+   "jackpot2": 3440619542,
+   "seed": true
+  },
+  {
+   "ky": "01349",
+   "date": "23-05-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    8,
+    12,
+    20,
+    35,
+    55
+   ],
+   "bonus": 53,
+   "jackpot1": 40198945188,
+   "jackpot2": 4277183461,
+   "seed": true
+  },
+  {
+   "ky": "01348",
+   "date": "21-05-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    13,
+    26,
+    33,
+    38,
+    47,
+    53
+   ],
+   "bonus": 37,
+   "jackpot1": 33104210535,
+   "jackpot2": 4219742603,
+   "seed": true
+  },
+  {
+   "ky": "01347",
+   "date": "19-05-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    13,
+    17,
+    23,
+    24,
+    30,
+    35
+   ],
+   "bonus": 44,
+   "jackpot1": 76274884380,
+   "jackpot2": 3265689994,
+   "seed": true
+  },
+  {
+   "ky": "01346",
+   "date": "16-05-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    5,
+    6,
+    7,
+    29,
+    50,
+    52
+   ],
+   "bonus": 54,
+   "jackpot1": 42458145879,
+   "jackpot2": 4298636076,
+   "seed": true
+  },
+  {
+   "ky": "01345",
+   "date": "14-05-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    19,
+    25,
+    36,
+    39,
+    46,
+    48
+   ],
+   "bonus": 36,
+   "jackpot1": 46677613446,
+   "jackpot2": 4329460558,
+   "seed": true
+  },
+  {
+   "ky": "01344",
+   "date": "12-05-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    12,
+    41,
+    45,
+    51,
+    54
+   ],
+   "bonus": 54,
+   "jackpot1": 47596087784,
+   "jackpot2": 3305317358,
+   "seed": true
+  },
+  {
+   "ky": "01343",
+   "date": "09-05-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    20,
+    22,
+    23,
+    31,
+    40,
+    44
+   ],
+   "bonus": 7,
+   "jackpot1": 42888215642,
+   "jackpot2": 4405253860,
+   "seed": true
+  },
+  {
+   "ky": "01342",
+   "date": "07-05-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    15,
+    18,
+    22,
+    38,
+    43,
+    55
+   ],
+   "bonus": 45,
+   "jackpot1": 78223777695,
+   "jackpot2": 3145482093,
+   "seed": true
+  },
+  {
+   "ky": "01341",
+   "date": "05-05-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    7,
+    9,
+    11,
+    12,
+    24,
+    42
+   ],
+   "bonus": 43,
+   "jackpot1": 81388830151,
+   "jackpot2": 3456415717,
+   "seed": true
+  },
+  {
+   "ky": "01340",
+   "date": "02-05-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    1,
+    3,
+    10,
+    24,
+    30,
+    33
+   ],
+   "bonus": 40,
+   "jackpot1": 46850025705,
+   "jackpot2": 3677614998,
+   "seed": true
+  },
+  {
+   "ky": "01339",
+   "date": "30-04-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    6,
+    22,
+    27,
+    29,
+    37,
+    53
+   ],
+   "bonus": 27,
+   "jackpot1": 51306044044,
+   "jackpot2": 3692833083,
+   "seed": true
+  },
+  {
+   "ky": "01338",
+   "date": "28-04-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    3,
+    9,
+    39,
+    41,
+    51,
+    55
+   ],
+   "bonus": 22,
+   "jackpot1": 74287148348,
+   "jackpot2": 4303965801,
+   "seed": true
+  },
+  {
+   "ky": "01337",
+   "date": "25-04-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    1,
+    14,
+    26,
+    27,
+    30,
+    32
+   ],
+   "bonus": 43,
+   "jackpot1": 42608678431,
+   "jackpot2": 3957126121,
+   "seed": true
+  },
+  {
+   "ky": "01336",
+   "date": "23-04-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    1,
+    9,
+    23,
+    34,
+    47,
+    54
+   ],
+   "bonus": 23,
+   "jackpot1": 80332502909,
+   "jackpot2": 4784052134,
+   "seed": true
+  },
+  {
+   "ky": "01335",
+   "date": "21-04-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    10,
+    30,
+    31,
+    39,
+    47
+   ],
+   "bonus": 52,
+   "jackpot1": 94973954102,
+   "jackpot2": 4990265128,
+   "seed": true
+  },
+  {
+   "ky": "01334",
+   "date": "18-04-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    30,
+    36,
+    43,
+    45,
+    51,
+    52
+   ],
+   "bonus": 35,
+   "jackpot1": 63192735805,
+   "jackpot2": 3979149939,
+   "seed": true
+  },
+  {
+   "ky": "01333",
+   "date": "16-04-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    11,
+    23,
+    26,
+    40,
+    41,
+    45
+   ],
+   "bonus": 38,
+   "jackpot1": 52340934451,
+   "jackpot2": 4742232062,
+   "seed": true
+  },
+  {
+   "ky": "01332",
+   "date": "14-04-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    10,
+    12,
+    21,
+    28,
+    30,
+    48
+   ],
+   "bonus": 40,
+   "jackpot1": 86649562118,
+   "jackpot2": 3989017760,
+   "seed": true
+  },
+  {
+   "ky": "01331",
+   "date": "11-04-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    4,
+    17,
+    26,
+    30,
+    45,
+    50
+   ],
+   "bonus": 36,
+   "jackpot1": 63729844712,
+   "jackpot2": 3617486456,
+   "seed": true
+  },
+  {
+   "ky": "01330",
+   "date": "09-04-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    11,
+    20,
+    33,
+    38,
+    50,
+    54
+   ],
+   "bonus": 28,
+   "jackpot1": 41829146107,
+   "jackpot2": 3674102933,
+   "seed": true
+  },
+  {
+   "ky": "01329",
+   "date": "07-04-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    2,
+    6,
+    7,
+    13,
+    32,
+    38
+   ],
+   "bonus": 41,
+   "jackpot1": 31906262109,
+   "jackpot2": 3094304050,
+   "seed": true
+  },
+  {
+   "ky": "01328",
+   "date": "04-04-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    2,
+    3,
+    23,
+    29,
+    38,
+    42
+   ],
+   "bonus": 41,
+   "jackpot1": 47540251268,
+   "jackpot2": 3672742128,
+   "seed": true
+  },
+  {
+   "ky": "01327",
+   "date": "02-04-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    9,
+    19,
+    21,
+    40,
+    41,
+    48
+   ],
+   "bonus": 9,
+   "jackpot1": 85863121857,
+   "jackpot2": 4671657408,
+   "seed": true
+  },
+  {
+   "ky": "01326",
+   "date": "31-03-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    2,
+    20,
+    22,
+    23,
+    39,
+    47
+   ],
+   "bonus": 30,
+   "jackpot1": 40636635085,
+   "jackpot2": 3452519709,
+   "seed": true
+  },
+  {
+   "ky": "01325",
+   "date": "28-03-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    21,
+    22,
+    23,
+    27,
+    29,
+    50
+   ],
+   "bonus": 32,
+   "jackpot1": 41376399300,
+   "jackpot2": 3774939605,
+   "seed": true
+  },
+  {
+   "ky": "01324",
+   "date": "26-03-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    7,
+    13,
+    25,
+    43,
+    46,
+    53
+   ],
+   "bonus": 33,
+   "jackpot1": 96042845046,
+   "jackpot2": 3948792827,
+   "seed": true
+  },
+  {
+   "ky": "01323",
+   "date": "24-03-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    4,
+    34,
+    35,
+    37,
+    42,
+    44
+   ],
+   "bonus": 39,
+   "jackpot1": 69412665730,
+   "jackpot2": 3074028872,
+   "seed": true
+  },
+  {
+   "ky": "01322",
+   "date": "21-03-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    6,
+    15,
+    17,
+    20,
+    34
+   ],
+   "bonus": 44,
+   "jackpot1": 56591942596,
+   "jackpot2": 3506304566,
+   "seed": true
+  },
+  {
+   "ky": "01321",
+   "date": "19-03-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    14,
+    22,
+    37,
+    43,
+    45,
+    51
+   ],
+   "bonus": 38,
+   "jackpot1": 77457741815,
+   "jackpot2": 4384444587,
+   "seed": true
+  },
+  {
+   "ky": "01320",
+   "date": "17-03-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    16,
+    20,
+    24,
+    30,
+    38,
+    43
+   ],
+   "bonus": 7,
+   "jackpot1": 33117998766,
+   "jackpot2": 3378775469,
+   "seed": true
+  },
+  {
+   "ky": "01319",
+   "date": "14-03-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    19,
+    21,
+    22,
+    25,
+    42,
+    55
+   ],
+   "bonus": 29,
+   "jackpot1": 42652326461,
+   "jackpot2": 4888007470,
+   "seed": true
+  },
+  {
+   "ky": "01318",
+   "date": "12-03-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    9,
+    26,
+    28,
+    30,
+    43,
+    54
+   ],
+   "bonus": 33,
+   "jackpot1": 46926943773,
+   "jackpot2": 4998225449,
+   "seed": true
+  },
+  {
+   "ky": "01317",
+   "date": "10-03-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    12,
+    24,
+    38,
+    40,
+    46,
+    51
+   ],
+   "bonus": 41,
+   "jackpot1": 62271336554,
+   "jackpot2": 4220029099,
+   "seed": true
+  },
+  {
+   "ky": "01316",
+   "date": "07-03-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    5,
+    15,
+    19,
+    30,
+    31,
+    35
+   ],
+   "bonus": 3,
+   "jackpot1": 36011016471,
+   "jackpot2": 4036712260,
+   "seed": true
+  },
+  {
+   "ky": "01315",
+   "date": "05-03-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    22,
+    25,
+    27,
+    33,
+    36,
+    42
+   ],
+   "bonus": 54,
+   "jackpot1": 42875942552,
+   "jackpot2": 3291183359,
+   "seed": true
+  },
+  {
+   "ky": "01314",
+   "date": "03-03-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    11,
+    18,
+    29,
+    36,
+    49
+   ],
+   "bonus": 38,
+   "jackpot1": 59781622169,
+   "jackpot2": 3849614485,
+   "seed": true
+  },
+  {
+   "ky": "01313",
+   "date": "28-02-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    3,
+    30,
+    36,
+    38,
+    44,
+    48
+   ],
+   "bonus": 4,
+   "jackpot1": 38098578967,
+   "jackpot2": 3094131221,
+   "seed": true
+  },
+  {
+   "ky": "01312",
+   "date": "26-02-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    1,
+    7,
+    9,
+    17,
+    30,
+    45
+   ],
+   "bonus": 32,
+   "jackpot1": 31052224314,
+   "jackpot2": 3106740132,
+   "seed": true
+  },
+  {
+   "ky": "01311",
+   "date": "24-02-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    8,
+    10,
+    26,
+    28,
+    33,
+    38
+   ],
+   "bonus": 34,
+   "jackpot1": 40019001639,
+   "jackpot2": 3952303771,
+   "seed": true
+  },
+  {
+   "ky": "01310",
+   "date": "21-02-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    5,
+    17,
+    25,
+    32,
+    44,
+    45
+   ],
+   "bonus": 40,
+   "jackpot1": 58956977443,
+   "jackpot2": 4504190636,
+   "seed": true
+  },
+  {
+   "ky": "01309",
+   "date": "19-02-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    9,
+    18,
+    19,
+    25,
+    43,
+    53
+   ],
+   "bonus": 16,
+   "jackpot1": 43570732395,
+   "jackpot2": 4515953877,
+   "seed": true
+  },
+  {
+   "ky": "01308",
+   "date": "17-02-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    7,
+    10,
+    12,
+    43,
+    47,
+    48
+   ],
+   "bonus": 6,
+   "jackpot1": 73618403219,
+   "jackpot2": 4096822941,
+   "seed": true
+  },
+  {
+   "ky": "01307",
+   "date": "14-02-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    7,
+    14,
+    18,
+    19,
+    20,
+    42
+   ],
+   "bonus": 36,
+   "jackpot1": 45400728997,
+   "jackpot2": 3242955682,
+   "seed": true
+  },
+  {
+   "ky": "01306",
+   "date": "12-02-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    2,
+    14,
+    15,
+    32,
+    38,
+    42
+   ],
+   "bonus": 28,
+   "jackpot1": 30298433052,
+   "jackpot2": 3896809049,
+   "seed": true
+  },
+  {
+   "ky": "01305",
+   "date": "10-02-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    8,
+    15,
+    19,
+    29,
+    33,
+    39
+   ],
+   "bonus": 26,
+   "jackpot1": 50317898266,
+   "jackpot2": 4972352705,
+   "seed": true
+  },
+  {
+   "ky": "01304",
+   "date": "07-02-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    13,
+    14,
+    30,
+    38,
+    41,
+    52
+   ],
+   "bonus": 8,
+   "jackpot1": 69793348105,
+   "jackpot2": 3019417495,
+   "seed": true
+  },
+  {
+   "ky": "01303",
+   "date": "05-02-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    8,
+    11,
+    25,
+    37,
+    39,
+    44
+   ],
+   "bonus": 3,
+   "jackpot1": 69379036235,
+   "jackpot2": 3579720029,
+   "seed": true
+  },
+  {
+   "ky": "01302",
+   "date": "03-02-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    7,
+    17,
+    31,
+    33,
+    36,
+    50
+   ],
+   "bonus": 38,
+   "jackpot1": 32677148398,
+   "jackpot2": 3539821307,
+   "seed": true
+  },
+  {
+   "ky": "01301",
+   "date": "31-01-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    7,
+    9,
+    18,
+    25,
+    45,
+    47
+   ],
+   "bonus": 34,
+   "jackpot1": 57917570283,
+   "jackpot2": 4056850357,
+   "seed": true
+  },
+  {
+   "ky": "01300",
+   "date": "29-01-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    5,
+    11,
+    24,
+    31,
+    35,
+    37
+   ],
+   "bonus": 6,
+   "jackpot1": 93940935553,
+   "jackpot2": 3520130191,
+   "seed": true
+  },
+  {
+   "ky": "01299",
+   "date": "27-01-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    1,
+    8,
+    22,
+    27,
+    47,
+    53
+   ],
+   "bonus": 13,
+   "jackpot1": 98006397841,
+   "jackpot2": 3428139111,
+   "seed": true
+  },
+  {
+   "ky": "01298",
+   "date": "24-01-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    7,
+    11,
+    21,
+    37,
+    43,
+    46
+   ],
+   "bonus": 52,
+   "jackpot1": 62353121933,
+   "jackpot2": 4786239461,
+   "seed": true
+  },
+  {
+   "ky": "01297",
+   "date": "22-01-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    10,
+    11,
+    16,
+    22,
+    25,
+    32
+   ],
+   "bonus": 48,
+   "jackpot1": 72695789022,
+   "jackpot2": 3879552449,
+   "seed": true
+  },
+  {
+   "ky": "01296",
+   "date": "20-01-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    2,
+    31,
+    44,
+    45,
+    49,
+    52
+   ],
+   "bonus": 55,
+   "jackpot1": 89743101361,
+   "jackpot2": 3191018017,
+   "seed": true
+  },
+  {
+   "ky": "01295",
+   "date": "17-01-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    14,
+    20,
+    35,
+    48,
+    53,
+    54
+   ],
+   "bonus": 33,
+   "jackpot1": 30307068265,
+   "jackpot2": 3223885003,
+   "seed": true
+  },
+  {
+   "ky": "01294",
+   "date": "15-01-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    6,
+    12,
+    31,
+    32,
+    41,
+    47
+   ],
+   "bonus": 44,
+   "jackpot1": 35695726410,
+   "jackpot2": 4256429273,
+   "seed": true
+  },
+  {
+   "ky": "01293",
+   "date": "13-01-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    5,
+    12,
+    20,
+    27,
+    29,
+    39
+   ],
+   "bonus": 19,
+   "jackpot1": 39797539804,
+   "jackpot2": 4663635436,
+   "seed": true
+  },
+  {
+   "ky": "01292",
+   "date": "10-01-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    6,
+    7,
+    10,
+    17,
+    24,
+    37
+   ],
+   "bonus": 40,
+   "jackpot1": 54691675466,
+   "jackpot2": 3764901629,
+   "seed": true
+  },
+  {
+   "ky": "01291",
+   "date": "08-01-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    3,
+    5,
+    15,
+    24,
+    34,
+    50
+   ],
+   "bonus": 26,
+   "jackpot1": 71617695689,
+   "jackpot2": 4195627266,
+   "seed": true
+  },
+  {
+   "ky": "01290",
+   "date": "06-01-2026",
+   "weekday": "Thứ ba",
+   "numbers": [
+    14,
+    25,
+    29,
+    32,
+    36,
+    49
+   ],
+   "bonus": 52,
+   "jackpot1": 71899510843,
+   "jackpot2": 4077163535,
+   "seed": true
+  },
+  {
+   "ky": "01289",
+   "date": "03-01-2026",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    6,
+    13,
+    30,
+    34,
+    46,
+    51
+   ],
+   "bonus": 11,
+   "jackpot1": 98222791361,
+   "jackpot2": 4654007525,
+   "seed": true
+  },
+  {
+   "ky": "01288",
+   "date": "01-01-2026",
+   "weekday": "Thứ năm",
+   "numbers": [
+    1,
+    16,
+    19,
+    20,
+    45,
+    47
+   ],
+   "bonus": 54,
+   "jackpot1": 73755686634,
+   "jackpot2": 3877973537,
+   "seed": true
+  },
+  {
+   "ky": "01287",
+   "date": "30-12-2025",
+   "weekday": "Thứ ba",
+   "numbers": [
+    5,
+    18,
+    24,
+    37,
+    40,
+    46
+   ],
+   "bonus": 6,
+   "jackpot1": 46714248384,
+   "jackpot2": 4025781480,
+   "seed": true
+  },
+  {
+   "ky": "01286",
+   "date": "27-12-2025",
+   "weekday": "Thứ bảy",
+   "numbers": [
+    14,
+    23,
+    24,
+    30,
+    33,
+    44
+   ],
+   "bonus": 19,
+   "jackpot1": 41410891357,
+   "jackpot2": 3147592319,
+   "seed": true
+  },
+  {
+   "ky": "01285",
+   "date": "25-12-2025",
+   "weekday": "Thứ năm",
+   "numbers": [
+    1,
+    5,
+    37,
+    40,
+    49,
+    52
+   ],
+   "bonus": 31,
+   "jackpot1": 46474017393,
+   "jackpot2": 3749958164,
+   "seed": true
+  }
+ ]
+}

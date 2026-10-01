@@ -5,13 +5,15 @@
  * nhấp vào một node để xem phân tích chi tiết số đó.
  */
 import { useMemo, useState } from 'react';
-import type { GraphEdge } from '@/lib/graph';
 
 interface Props {
-  scores: number[]; // PageRank 100 số
-  edges: GraphEdge[]; // cạnh đã lọc top
-  selected: number | null;
+  scores: number[]; // PageRank — độ dài mảng = số node (100 số lô tô / 55 số Power)
+  edges: { a: number; b: number; weight: number }[]; // cạnh đã lọc top (chỉ số 0-based)
+  selected: number | null; // chỉ số node đang chọn (0-based)
   onSelect: (n: number) => void;
+  /** Nhãn hiển thị của node; mặc định "00".."99" theo chỉ số. */
+  labelOf?: (n: number) => string;
+  ariaLabel?: string;
 }
 
 const W = 640;
@@ -29,21 +31,23 @@ function colorFor(t: number): string {
   return `hsl(${hue.toFixed(0)},${sat.toFixed(0)}%,${lit.toFixed(0)}%)`;
 }
 
-export default function KnowledgeGraph({ scores, edges, selected, onSelect }: Props) {
+export default function KnowledgeGraph({ scores, edges, selected, onSelect, labelOf, ariaLabel }: Props) {
   const [hover, setHover] = useState<number | null>(null);
+  const N = scores.length;
 
   const nodes = useMemo(() => {
     const order = scores
       .map((s, i) => ({ s, i }))
       .sort((a, b) => a.s - b.s)
       .map((x) => x.i);
-    const rankOf = new Array(100).fill(0);
-    order.forEach((num, r) => (rankOf[num] = r / 99));
+    const rankOf = new Array(N).fill(0);
+    order.forEach((num, r) => (rankOf[num] = N > 1 ? r / (N - 1) : 0));
     const min = Math.min(...scores);
     const max = Math.max(...scores);
     const span = max - min || 1;
-    return Array.from({ length: 100 }, (_, n) => {
-      const ang = (n / 100) * Math.PI * 2 - Math.PI / 2;
+    const label = labelOf ?? ((n: number) => String(n).padStart(2, '0'));
+    return Array.from({ length: N }, (_, n) => {
+      const ang = (n / N) * Math.PI * 2 - Math.PI / 2;
       const t = (scores[n] - min) / span;
       return {
         n,
@@ -51,11 +55,11 @@ export default function KnowledgeGraph({ scores, edges, selected, onSelect }: Pr
         y: CY + R * Math.sin(ang),
         r: 9 + t * 17,
         color: colorFor(rankOf[n]),
-        label: String(n).padStart(2, '0'),
+        label: label(n),
         showLabel: t > 0.35,
       };
     });
-  }, [scores]);
+  }, [scores, N, labelOf]);
 
   const maxW = useMemo(
     () => edges.reduce((m, e) => Math.max(m, e.weight), 1),
@@ -73,7 +77,7 @@ export default function KnowledgeGraph({ scores, edges, selected, onSelect }: Pr
         viewBox={`0 0 ${W} ${H}`}
         style={{ width: '100%', height: 'auto', background: '#0b0f1a', borderRadius: 12 }}
         role="img"
-        aria-label="Đồ thị tri thức các số lô tô"
+        aria-label={ariaLabel ?? 'Đồ thị tri thức các số lô tô'}
       >
         {/* cạnh */}
         {edges.map((e, i) => {

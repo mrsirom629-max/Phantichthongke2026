@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Thống kê XSMN theo mẫu',
   description:
-    'Kết quả xổ số miền Nam theo mẫu bảng, thống kê tần suất và lab thực hành mạng nơ-ron. Dữ liệu: Minh Ngọc.',
+    'Kết quả xổ số miền Nam/Bắc theo mẫu bảng, Vietlott Power 6/55, thống kê tần suất và lab thực hành mạng nơ-ron. Dữ liệu: Minh Ngọc.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav className="nav">
               <a href="/">Kết quả</a>
               <a href="/thong-ke">Thống kê</a>
+              <a href="/power-655">Power 6/55</a>
               <a href="/lab">Lab mạng nơ-ron</a>
               <a href="/du-bao">Dự báo</a>
             </nav>
