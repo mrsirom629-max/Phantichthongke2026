@@ -5,6 +5,7 @@ import { XSMN_SCHEDULE } from '../../lib/constants';
 import { addDays, computeStats, drawsInRange, todayVN } from '../../lib/stats';
 import { useMasterdataLoad } from '../../lib/useMasterdataLoad';
 import MasterdataPanel from '../../components/MasterdataPanel';
+import StoragePanel from '../../components/StoragePanel';
 import type { NumberStat, StatsResult } from '../../lib/types';
 
 const DAY_OPTIONS = [7, 14, 30, 60, 90];
@@ -259,6 +260,8 @@ export default function StatsPage() {
           {master && (
             <MasterdataPanel rows={master.rows} summary={master.summary} />
           )}
+
+          <StoragePanel refreshKey={master?.summary.totalMaster ?? 0} />
 
           <div className="grid2">
             <div className="card">

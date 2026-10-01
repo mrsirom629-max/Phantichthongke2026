@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
   }
   const existing = await store.read([]);
   const { days, report } = mergeMasterdata(existing, incoming);
+  // Không có gì mới → bỏ qua ghi để tránh commit/deploy thừa
+  if (report.added === 0 && report.upgraded === 0) {
+    return NextResponse.json({ ok: true, written: false, ...report });
+  }
   try {
     await store.write(days);
   } catch (e) {
@@ -69,5 +73,5 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: 'Không ghi được masterdata.' }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, ...report });
+  return NextResponse.json({ ok: true, written: true, ...report });
 }
