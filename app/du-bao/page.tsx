@@ -17,7 +17,7 @@ import { cmpDate, parseD, todayVN } from '@/lib/stats';
 import type { DayResult, Mien } from '@/lib/types';
 
 const LOCAL_KEY = 'fc-log-local-v1';
-const DEFAULT_K = 15;
+const DEFAULT_K = 10;
 
 type SimPhase = 'idle' | 'loading-days' | 'training' | 'preview' | 'saving' | 'done';
 
@@ -415,7 +415,7 @@ export default function ForecastPage() {
           <div className="field">
             <label htmlFor="fk">Số dự đoán (k)</label>
             <select id="fk" value={k} onChange={(e) => setK(Number(e.target.value))}>
-              {[5, 10, 15, 20].map((v) => (
+              {[1, 2, 3, 4, 10].map((v) => (
                 <option key={v} value={v}>
                   {v}
                 </option>
