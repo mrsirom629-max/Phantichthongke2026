@@ -70,11 +70,16 @@ export function predictTopK(
   return topK(scores, k).map((i) => fmtNum(String(i)));
 }
 
-/** Baseline tần suất: k số xuất hiện nhiều nhất trong cửa sổ dữ liệu. */
-export function freqTopK(days: DayResult[], k: number): string[] {
+/** Số lần xuất hiện của 100 số lô tô trong toàn bộ cửa sổ dữ liệu. */
+export function freqCounts(days: DayResult[]): number[] {
   const counts = new Array<number>(100).fill(0);
   for (const d of days) for (const n of lotoOfDay(d)) counts[n]++;
-  return topK(counts, k).map((i) => fmtNum(String(i)));
+  return counts;
+}
+
+/** Baseline tần suất: k số xuất hiện nhiều nhất trong cửa sổ dữ liệu. */
+export function freqTopK(days: DayResult[], k: number): string[] {
+  return topK(freqCounts(days), k).map((i) => fmtNum(String(i)));
 }
 
 /**

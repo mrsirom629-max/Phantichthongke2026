@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 function isModel(v: unknown): v is ForecastModel {
-  return v === 'mlp' || v === 'freq' || v === 'graph';
+  return v === 'mlp' || v === 'freq' || v === 'graph' || v === 'all';
 }
 
 function isNumStr(v: unknown): v is string {

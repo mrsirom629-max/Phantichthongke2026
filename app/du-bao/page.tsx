@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { loadDaysLive } from '@/lib/liveDays';
 import { freqTopK, predictTopK, trainForecastMLP, type TrainProgress } from '@/lib/forecastModel';
 import { graphTopK } from '@/lib/graph';
+import { ensembleTopK } from '@/lib/ensemble';
 import {
   MODEL_LABELS,
   entryMien,
@@ -192,6 +193,12 @@ export default function ForecastPage() {
         setTrainProg({ epoch: 0, total: epochs, loss: 0 });
         const mlp = await trainForecastMLP(past, lookback, hidden, epochs, 0.5, 42, setTrainProg);
         numbers = predictTopK(mlp, past, lookback, k);
+      } else if (model === 'all') {
+        // Ensemble: train MLP một lần rồi Borda-fusion với tần suất + PageRank
+        setPhase('training');
+        setTrainProg({ epoch: 0, total: epochs, loss: 0 });
+        const mlp = await trainForecastMLP(past, lookback, hidden, epochs, 0.5, 42, setTrainProg);
+        numbers = ensembleTopK(mlp, past, lookback, k);
       } else if (model === 'graph') {
         // Đồ thị tri thức: PageRank trên đồ thị đồng xuất hiện của 90 ngày quá khứ
         numbers = graphTopK(past, k);
@@ -410,6 +417,7 @@ export default function ForecastPage() {
               <option value="mlp">{MODEL_LABELS.mlp}</option>
               <option value="freq">{MODEL_LABELS.freq}</option>
               <option value="graph">{MODEL_LABELS.graph}</option>
+              <option value="all">{MODEL_LABELS.all}</option>
             </select>
           </div>
           <div className="field">
@@ -436,7 +444,7 @@ export default function ForecastPage() {
         <div className="row" style={{ marginTop: 8 }}>
           <div className="field">
             <label htmlFor="lookback">Lookback</label>
-            <select id="lookback" value={lookback} onChange={(e) => setLookback(Number(e.target.value))} disabled={model !== 'mlp'}>
+            <select id="lookback" value={lookback} onChange={(e) => setLookback(Number(e.target.value))} disabled={model !== 'mlp' && model !== 'all'}>
               {[3, 5, 10].map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -446,7 +454,7 @@ export default function ForecastPage() {
           </div>
           <div className="field">
             <label htmlFor="hidden">Nơ-ron ẩn</label>
-            <select id="hidden" value={hidden} onChange={(e) => setHidden(Number(e.target.value))} disabled={model !== 'mlp'}>
+            <select id="hidden" value={hidden} onChange={(e) => setHidden(Number(e.target.value))} disabled={model !== 'mlp' && model !== 'all'}>
               {[16, 32, 64].map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -456,7 +464,7 @@ export default function ForecastPage() {
           </div>
           <div className="field">
             <label htmlFor="epochs">Epoch</label>
-            <select id="epochs" value={epochs} onChange={(e) => setEpochs(Number(e.target.value))} disabled={model !== 'mlp'}>
+            <select id="epochs" value={epochs} onChange={(e) => setEpochs(Number(e.target.value))} disabled={model !== 'mlp' && model !== 'all'}>
               {[50, 200, 500].map((v) => (
                 <option key={v} value={v}>
                   {v}
@@ -465,6 +473,13 @@ export default function ForecastPage() {
             </select>
           </div>
         </div>
+        {model === 'all' && (
+          <p className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+            Chế độ <b>Tất cả</b>: train MLP một lần, rồi cộng điểm Borda theo thứ hạng của cả 3
+            mô hình (MLP + tần suất + PageRank) để chốt top-k. Điểm số chỉ dùng để xếp hạng,
+            không phải xác suất trúng.
+          </p>
+        )}
         {phase === 'loading-days' && (
           <div className="progress" style={{ marginTop: 8 }}>
             <div style={{ width: `${dayProg.total > 0 ? (dayProg.done / dayProg.total) * 100 : 0}%` }} />
