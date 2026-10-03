@@ -20,6 +20,18 @@ export function lotoOf(prizes: PrizeSet): string[] {
   return all.map((s) => s.slice(-2));
 }
 
+/**
+ * Quy tắc phạm vi phân tích (từ 02/10/2026, theo yêu cầu user):
+ * Thống kê / Lab / Dự báo chỉ xét 2 TỈNH ĐẦU TIÊN mỗi ngày,
+ * mỗi số chỉ lấy 2 chữ số cuối (lô tô). XSMB chỉ có 1 đài nên lấy cả đài đó.
+ */
+export const ANALYSIS_PROVINCE_COUNT = 2;
+
+/** Các tỉnh được đưa vào phân tích của một ngày (2 tỉnh đầu tiên). */
+export function analysisProvinces(day: DayResult): DayResult['provinces'] {
+  return day.provinces.slice(0, ANALYSIS_PROVINCE_COUNT);
+}
+
 // ─── Helpers ngày tháng ("DD-MM-YYYY", múi giờ VN) ────────────────────────────
 
 interface YMD {
@@ -102,7 +114,8 @@ export interface DrawNumbers {
 
 /**
  * Lọc các lượt quay trong [from, to] (bao gồm biên), mỗi đài một dòng.
- * @param province "all"/undefined → mọi đài; ngược lại khớp tên tỉnh hoặc mã đài.
+ * @param province "all"/undefined → 2 tỉnh đầu tiên mỗi ngày (quy tắc phân tích);
+ *   ngược lại khớp tên tỉnh hoặc mã đài (xem chi tiết 1 đài cụ thể).
  */
 export function drawsInRange(
   all: DayResult[],
@@ -113,7 +126,8 @@ export function drawsInRange(
   const out: DrawNumbers[] = [];
   for (const day of all) {
     if (cmpDate(day.date, from) < 0 || cmpDate(day.date, to) > 0) continue;
-    for (const p of day.provinces) {
+    const plist = province && province !== 'all' ? day.provinces : analysisProvinces(day);
+    for (const p of plist) {
       if (province && province !== 'all' && p.province !== province && p.code !== province) {
         continue;
       }

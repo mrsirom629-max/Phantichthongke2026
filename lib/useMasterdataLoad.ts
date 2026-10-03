@@ -10,7 +10,7 @@
  * 4. Dựng bảng chi tiết Thứ | Ngày | Số để kiểm chứng
  */
 import { useCallback, useRef, useState } from 'react';
-import { addDays, diffDays, isValidDate, lotoOf, todayVN } from './stats';
+import { addDays, diffDays, isValidDate, lotoOf, todayVN, analysisProvinces } from './stats';
 import { loadSpecificDays } from './liveDays';
 import type { DayResult, Mien } from './types';
 import type { StoredDay } from './masterdata';
@@ -71,7 +71,7 @@ function buildViewState(
   const upgradedSet = new Set(upgradedDates);
   const rows: MasterRow[] = rangeDays.map((day) => {
     const nums = new Set<string>();
-    for (const p of day.provinces) for (const n of lotoOf(p.prizes)) nums.add(n);
+    for (const p of analysisProvinces(day)) for (const n of lotoOf(p.prizes)) nums.add(n);
     return {
       date: day.date,
       numbers: Array.from(nums).sort(),

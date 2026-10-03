@@ -12,7 +12,7 @@
  * Các kỳ quay độc lập ngẫu nhiên — đồ thị KHÔNG dự đoán được tương lai.
  */
 import type { DayResult } from './types';
-import { cmpDate, lotoOf } from './stats';
+import { cmpDate, lotoOf, analysisProvinces } from './stats';
 
 export interface GraphEdge {
   a: number; // 0..99
@@ -29,10 +29,10 @@ export interface LotoGraph {
   freq: number[];
 }
 
-/** Tập lô tô phân biệt (00–99) của một ngày, dạng số nguyên. */
+/** Tập lô tô phân biệt (00–99) của một ngày, dạng số nguyên — 2 tỉnh đầu tiên. */
 export function dayLotoSet(day: DayResult): Set<number> {
   const s = new Set<number>();
-  for (const p of day.provinces) {
+  for (const p of analysisProvinces(day)) {
     for (const n of lotoOf(p.prizes)) s.add(parseInt(n, 10));
   }
   return s;

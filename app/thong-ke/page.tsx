@@ -341,7 +341,7 @@ export default function StatsPage() {
   return (
     <div>
       <h1>Thống kê lô tô</h1>
-      <p className="muted">Tần suất các số 00–99 trong khoảng ngày đã chọn, theo đài hoặc toàn miền Nam. Mỗi vòng là một chu kỳ mới lùi về quá khứ.</p>
+      <p className="muted">Tần suất các số 00–99 trong khoảng ngày đã chọn — chỉ xét 2 tỉnh đầu tiên mỗi ngày (mỗi số lấy 2 chữ số cuối). Mỗi vòng là một chu kỳ mới lùi về quá khứ.</p>
 
       <div className="card">
         <div className="row">

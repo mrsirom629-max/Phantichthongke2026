@@ -12,7 +12,7 @@
  * Module này thuần túy (client & server đều dùng được).
  */
 import type { DayResult, Mien } from './types';
-import { lotoOf } from './stats';
+import { lotoOf, analysisProvinces } from './stats';
 
 export type ForecastModel = 'mlp' | 'freq' | 'graph' | 'all';
 
@@ -78,10 +78,10 @@ export const MODEL_LABELS: Record<ForecastModel, string> = {
   all: 'Tất cả (kết hợp 3 mô hình)',
 };
 
-/** Tập lô tô phân biệt trong một ngày (2 chữ số cuối mọi giải, mọi đài). */
+/** Tập lô tô phân biệt trong một ngày (2 chữ số cuối mọi giải, 2 tỉnh đầu tiên). */
 export function truthLotoSet(day: DayResult): Set<string> {
   const s = new Set<string>();
-  for (const p of day.provinces) {
+  for (const p of analysisProvinces(day)) {
     for (const n of lotoOf(p.prizes)) s.add(n);
   }
   return s;

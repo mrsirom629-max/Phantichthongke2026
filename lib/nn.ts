@@ -4,6 +4,7 @@
  * KHÔNG phải để dự đoán xổ số (các kỳ quay là ngẫu nhiên độc lập).
  */
 import type { DayResult } from './types';
+import { analysisProvinces } from './stats';
 
 /** PRNG mulberry32 — tái lập được từ seed, dùng cho khởi tạo trọng số. */
 export function mulberry32(seed: number): () => number {
@@ -23,10 +24,10 @@ function last2(s: string): number {
   return Number.isNaN(n) ? -1 : n;
 }
 
-/** Trích mọi số lô tô (00–99) trong một ngày, từ tất cả giải của mọi đài. */
+/** Trích mọi số lô tô (00–99) trong một ngày: 2 tỉnh đầu tiên, 2 chữ số cuối mỗi giải. */
 export function lotoOfDay(day: DayResult): number[] {
   const out: number[] = [];
-  for (const p of day.provinces) {
+  for (const p of analysisProvinces(day)) {
     const ps = p.prizes;
     const groups: string[][] = [
       ps.db, ps.nhat, ps.nhi, ps.ba, ps.tu, ps.nam, ps.sau, ps.bay, ps.tam,
